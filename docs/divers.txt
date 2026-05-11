@@ -1,0 +1,184 @@
+Credentials par défaut eureka/eureka pour le dev — OK ?
+################### Validation de l'étape 3
+
+cd terangamed-backend/docker
+cp .env.example .env
+docker compose up -d postgres keycloak
+
+# Suivre l'import du realm (~45s) :
+docker compose logs -f keycloak | grep -E "(Imported|Listening)"
+
+# Vérifier OIDC discovery :
+curl -s http://localhost:8180/realms/terangamed/.well-known/openid-configuration | jq '.issuer'
+# → "http://localhost:8180/realms/terangamed"
+
+# Console admin : http://localhost:8180/admin (admin / admin)
+
+Cible                             URL exacte                                         Identifiants
+Console admin Keycloak            http://localhost:8180/                             admin/admin / admin
+Account console realm terangamed  http://localhost:8180/realms/terangamed/account/   admin / admin (utilisateur du realm)
+Account console realm terangamed  http://localhost:8180/realms/terangamed/account/   dr.martin / doctor123
+Account console realm terangamed  http://localhost:8180/realms/terangamed/account/   reception / reception
+
+# 1. Voir toutes les routes que le gateway a chargées
+curl -s http://localhost:8080/actuator/gateway/routes | python3 -m json.tool | head -80
+
+# Obtenir un JWT pour dr.martin :
+curl -s -X POST http://localhost:8180/realms/terangamed/protocol/openid-connect/token \
+  -d "grant_type=password" -d "client_id=terangamed-frontend" \
+  -d "username=dr.martin" -d "password=doctor123" | jq '.access_token'
+###################
+Rôle Swagger         Username          Password             À utiliser pour
+ADMIN                admin             admin                doctor-service POST/PUT/DELETE/PATCH /api/doctors, notification-service /api/notifications
+DOCTOR               dr.martin         doctor123            medical-record-service (consultations / prescriptions / antecedents)
+RECEPTIONIST         reception         reception            patient-service create/update, appointment-service
+################### Validation de l'étape 4.1
+-Problème: j'ai fait tout ce que tu as demadé mais j'ai encore les des erreure "PatientRepositoryTest » IllegalState Could not find a valid Docker environment. Please see logs and check configuration" et "PatientSpecificationsTest » IllegalState Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration"
+Probleme de Testcontainers
+-Solution: https://stackoverflow.com/questions/61108655/test-container-test-cases-are-failing-due-to-could-not-find-a-valid-docker-envi/79860621#79860621
+###################
+Switch Java Version
+1-# Java -version
+2-# /usr/libexec/java_home -V
+3-# export JAVA_HOME=`/usr/libexec/java_home -v 11.0.13`
+ ou export JAVA_HOME=`/usr/libexec/java_home -v 11.0.13`
+
+export JAVA_HOME=`/usr/libexec/java_home -v 17.0.1`
+export JAVA_HOME=`/usr/libexec/java_home -v 21.0.10`
+###########################################
+###### Processus et port
+# 1. Voir tous les processus utilisant 5432 (avec sudo, sinon vous ne voyez pas tout)
+sudo lsof -nP -iTCP:5432 -sTCP:LISTEN
+
+# 2. Conteneurs Docker (même arrêtés) qui réservent le port
+docker ps -a --filter "publish=5432"
+
+# 3. PostgreSQL local via Homebrew ?
+brew services list | grep -i postgres
+
+# 4. Sur macOS : qui détient le port côté Docker Desktop ?
+sudo netstat -anv | grep 5432
+###########################################
+
+Validation étape 6
+# Tests unitaires + repo
+cd terangamed-backend
+./mvnw -pl services/appointment-service -am clean verify
+
+# Build Docker
+cd docker && docker compose up -d --build appointment-service
+
+# Tester via Swagger
+# → http://localhost:8083/swagger-ui.html (Authorize avec dr.martin)
+# → POST /api/appointments avec patientId=1 et doctorId=1 (seedés)
+# → Retenter avec doctorId=4 (Mariama Kane, ON_LEAVE) → 409 DOCTOR_NOT_ACTIVE
+# → Retenter avec patientId=999 → 404 RESOURCE_NOT_FOUND
+# → Tenter overlap : 2 RDV même médecin même créneau → 409 APPOINTMENT_OVERLAP
+###########################################
+Validation étape 8.1
+
+cd terangamed-backend/docker && docker compose up -d kafka kafka-init schema-registry kafka-ui
+
+# Vérifier que les topics sont créés
+docker compose logs kafka-init | tail -15
+
+# Schema Registry répond
+curl http://localhost:8085/subjects
+
+# Kafka UI
+open http://localhost:8090
+
+###########################################
+#CauseCorrection1YAML duplicate keys (spring: × 2 dans application.yml)Fusion en 1 bloc unique2feign.RetryableException dans config communeDéplacé dans yml services Feign uniquement3Jest setupFilesAfterEach (typo)→ setupFilesAfterEnv4Date.toISOString format mismatchComparaison via getTime()5Schema.RequiredMode non résoluPin swagger-annotations 2.2.226UpdatePatientRequest constructor désynchronisé17 args nommés dans le test7Import ResponseStatus manquantAjouté8-DskipTests dans Dockerfiles compile encore les tests→ -Dmaven.test.skip=true9Flyway checksum + migrations manquantesdown -v + out-of-order: true10SpEL @outboxProperties ne trouvait pas le bean@Bean explicite avec nom prévisible11Issuer mismatch browser ↔ containerissuer-uri → jwk-set-uri12Apache local sur le port 8080Stopper Apache
+
+
+###########################################
+Validation 10.A3
+cd terangamed-frontend
+npm install                    # installe @playwright/test
+npx playwright install chromium  # télécharge le binaire navigateur (~150 MB)
+
+# Pré-requis : services up
+cd ../terangamed-backend && docker compose up -d
+cd ../terangamed-frontend && npm start &  # frontend dans un autre terminal
+
+# Smoke test pour valider le setup
+npm run test:e2e:smoke
+
+###########################################
+npm run test:e2e -- e2e/tests/admin-staff.spec.ts --grep "Détail" --reporter=line 2>&1 | head -50
+npm run test:e2e -- e2e/tests/admin-staff.spec.ts --reporter=list 2>&1 | tail -10
+"
+###########################################
+relance definitive
+cd terangamed-backend
+# 1. Supprime tous les target/ du projet
+find . -name target -type d -exec rm -rf {} + 2>/dev/null
+# 2. Supprime tous les artefacts TerangaMed du cache Maven local
+rm -rf ~/.m2/repository/com/terangamed
+# 3. Rebuild complet from scratch
+./mvnw clean install -DskipTests 2>&1 | tail -20
+# 4. Si le install passe, relance les tests
+./mvnw test 2>&1 | tail -30
+
+###########################################
+Suite — étape 10C.5 : validation manuelle end-to-end
+C'est l'étape de sign-off : tu lances toi-même la stack et tu joues le scénario du §3 de la doc. Je ne peux pas faire ça à ta place (besoin de Docker + Keycloak + Maven en local).
+Procédure proposée
+Phase A — Démarrage stack (~5 min)
+bashcd terangamed-backend/docker
+docker compose up -d postgres keycloak kafka schema-registry
+Attendre que docker compose logs -f keycloak | grep "Listening on" apparaisse.
+Phase B — Démarrer les 5 services (chaque service dans un terminal ou via IntelliJ)
+bash./mvnw -pl services/patient-service,services/doctor-service,services/appointment-service,services/medical-record-service,services/notification-service spring-boot:run
+Phase C — Smoke test automatique
+bash./scripts/swagger-smoke.sh
+Critère : Tous les services Swagger OK : 5/5
+Phase D — Validation manuelle Swagger UI
+
+Login dr.martin/doctor123 sur patient-service:8081 → créer un patient
+Login admin/admin sur doctor-service:8082 → créer un médecin
+Login dr.martin sur appointment-service:8083 → créer un RDV
+Login dr.martin sur medical-record-service:8084 → dossier + consultation + antécédent + ordonnance + signature
+Login admin/admin sur notification-service:8086 → vérifier les 4-5 events Kafka
+
+Ce que tu valides
+
+ Smoke script vert sur 5/5
+ Login OAuth2 fonctionne sur les 5 Swagger UI (badge "Authorized")
+ Workflow CRUD complet sans erreur
+ Notifications Kafka présentes pour chaque action
+ Tu peux fermer 10C avec confiance
+
+Ce qu'on fait ensuite
+Si tout passe → 10C clôturé → on enchaîne sur :
+
+10C.2 (gateway agrégé) en option
+10B (Dockerisation finale)
+#63 (extension coverage frontend)
+
+8.1. Récupérer un token sans Swagger
+get_token() {
+  local user="${1:-admin}" pwd="${2:-admin}"
+  curl -s -X POST "http://localhost:8180/realms/terangamed/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=password&client_id=terangamed-frontend&username=${user}&password=${pwd}&scope=openid profile email" \
+    | jq -r .access_token
+}
+
+TOKEN_ADMIN=$(get_token admin admin)
+TOKEN_DOC=$(get_token dr.martin doctor123)
+TOKEN_REC=$(get_token reception reception)
+
+8.2. Test rapide en curl (smoke API "live")
+curl -s -H "Authorization: Bearer $TOKEN_REC" "http://localhost:8081/api/patients?page=0&size=5" | jq '.content[] | {id, lastName, firstName}'
+
+8.3. Tail consolidé des 5 services (Linux/macOS)
+# Si tu lances les 5 services en background avec redirection log :
+tail -f /tmp/patient.log /tmp/doctor.log /tmp/appointment.log /tmp/medical.log /tmp/notification.log
+
+8.4. Reset complet (en cas de blocage)
+cd terangamed-backend/docker
+docker compose down -v          # ⚠️ supprime les volumes (DB + Keycloak)
+docker compose up -d postgres keycloak kafka schema-registry kafka-ui
+# Puis relancer les 5 services Spring (les migrations Flyway repassent)

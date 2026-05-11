@@ -1,0 +1,250 @@
+Je veux que tu conçoives et implémentes une application complète de gestion de cabinet médical avec une architecture microservices moderne, scalable et prête pour la production.
+
+Organisation du projet :
+- Backend dans un dossier : terangamed-backend
+- Frontend dans un dossier : terangamed-frontend
+
+---
+
+Stack technique imposée :
+
+Backend :
+- Spring Boot + Spring Cloud
+- Accès aux données : Spring Data JPA avec utilisation OBLIGATOIRE de Specifications
+- Base de données : PostgreSQL
+- Sécurité : Keycloak (OAuth2 / OpenID Connect)
+- API documentation : Swagger / OpenAPI (springdoc-openapi)
+- Communication inter-service : OpenFeign ou WebClient
+- Résilience : Resilience4j
+
+Frontend :
+- Angular
+- Authentification Keycloak
+
+Containerisation :
+- Docker + Docker Compose
+
+---
+
+IMPORTANT (OBLIGATOIRE) :
+
+- NE PAS utiliser de requêtes JPQL avec (:param IS NULL OR ...)
+- Utiliser exclusivement Spring Data JPA Specifications pour les filtres dynamiques
+- Tous les endpoints doivent être testables via Swagger avec authentification Keycloak
+- Implémenter des tests unitaires et d’intégration avec une couverture minimale de 80%
+
+---
+
+OBJECTIF GLOBAL :
+
+Créer un système où :
+- tous les microservices sont indépendants
+- toutes les APIs sont sécurisées avec Keycloak
+- Swagger permet de tester tous les endpoints avec token JWT
+- le système est robuste, maintenable et prêt pour la production
+
+---
+
+1. Architecture microservices
+
+Inclure :
+
+- API Gateway (Spring Cloud Gateway)
+- Service Discovery (Eureka)
+- Config Server
+- Keycloak (serveur d’authentification)
+
+Microservices métier :
+
+- patient-service
+- doctor-service
+- appointment-service
+- medical-record-service
+- billing-service
+- notification-service
+
+Chaque service doit :
+- avoir sa propre base de données
+- être totalement indépendant
+
+---
+
+2. Backend (Spring Boot)
+
+Pour chaque microservice :
+
+- architecture propre :
+  - controller
+  - service
+  - repository
+  - dto
+  - mapper
+- utilisation obligatoire de Spring Data JPA Specifications
+- implémentation de filtres dynamiques via Specification
+- pagination + tri avec validation des champs (whitelist)
+- gestion globale des exceptions
+- validation des entrées (Bean Validation)
+- logs structurés
+
+Communication inter-services :
+- OpenFeign ou WebClient
+- gestion timeout + retry
+- circuit breaker (Resilience4j)
+
+---
+
+3. Sécurité avec Keycloak
+
+Configurer :
+
+- un realm
+- clients :
+  - frontend Angular
+  - gateway
+  - microservices
+- rôles :
+  - ADMIN
+  - DOCTOR
+  - RECEPTIONIST
+
+Implémenter :
+
+- sécurisation des endpoints via Spring Security
+- propagation du JWT entre microservices
+- extraction des rôles dans le backend
+
+IMPORTANT :
+- Swagger doit être configuré avec OAuth2 Keycloak
+- possibilité de tester les endpoints directement depuis Swagger avec token
+
+---
+
+4. Swagger / OpenAPI
+
+Configurer :
+
+- Swagger pour chaque microservice
+- support OAuth2 avec Keycloak
+- documentation claire
+
+Objectif :
+Tester tous les endpoints via Swagger avec authentification.
+
+---
+
+5. Frontend Angular (dossier terangamed-frontend)
+
+Créer une application Angular avec :
+
+- intégration Keycloak
+- gestion des tokens JWT
+- guards pour les routes sécurisées
+
+Modules :
+
+- gestion patients
+- gestion médecins
+- gestion rendez-vous
+- dossiers médicaux
+- facturation
+
+Fonctionnalités :
+
+- appels API via Gateway
+- gestion des erreurs
+- UI simple mais propre
+
+---
+
+6. Base de données (PostgreSQL)
+
+Pour chaque microservice :
+
+- schéma propre
+- relations optimisées
+- migrations avec Flyway ou Liquibase
+
+---
+
+7. Docker & orchestration
+
+Créer :
+
+- Dockerfile pour chaque service
+- docker-compose incluant :
+  - tous les microservices
+  - PostgreSQL
+  - Keycloak
+  - Eureka
+  - Config Server
+  - Gateway
+
+Configurer :
+- réseaux
+- variables d’environnement
+- health checks
+
+---
+
+8. Tests (OBLIGATOIRE ≥ 80%)
+
+Implémenter :
+
+Tests unitaires :
+- JUnit
+- Mockito
+
+Tests d’intégration :
+- Spring Boot Test
+- Testcontainers (PostgreSQL)
+
+Couvrir :
+
+- services
+- controllers
+- specifications
+- sécurité
+
+Fournir :
+- configuration Jacoco
+- rapport de couverture ≥ 80%
+
+---
+
+9. Validation & tests API
+
+Fournir :
+
+- procédure complète pour tester via Swagger
+- comment récupérer un token Keycloak
+- exemples de requêtes sécurisées
+
+---
+
+10. Livrables attendus
+
+Je veux :
+
+1. structure complète des dossiers (terangamed-backend / terangamed-frontend)
+2. code backend principal pour chaque microservice
+3. implémentation détaillée des Specifications
+4. configuration complète de Keycloak
+5. configuration Swagger avec OAuth2
+6. configuration Angular (auth + API)
+7. docker-compose complet
+8. tests unitaires et d’intégration
+9. rapport de couverture ≥ 80%
+10. procédure étape par étape pour lancer le projet
+11. checklist complète de validation
+
+---
+
+IMPORTANT :
+
+- code prêt à exécuter
+- architecture réaliste niveau production
+- éviter toutes les erreurs liées à PostgreSQL et aux paramètres null
+- expliquer chaque choix technique
+- avancer étape par étape et attendre validation avant de continuer
+
+Commence par proposer l’architecture globale détaillée du système.
