@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "ConsultationSigned",
+  "namespace": "com.terangamed.medical.event",
+  "doc": "Émis quand un médecin signe sa consultation (action terminale). Déclenche typiquement la facturation et l'envoi du compte-rendu au patient.",
+  "fields": [
+    { "name": "eventId",         "type": "string" },
+    { "name": "occurredAt",      "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "consultationId",  "type": "long" },
+    { "name": "medicalRecordId", "type": "long" },
+    { "name": "patientId",       "type": "long" },
+    { "name": "doctorId",        "type": "long" },
+    { "name": "signedAt",        "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "signedBy",        "type": "string" },
+    { "name": "appointmentId",   "type": ["null", "long"], "default": null },
+    { "name": "diagnostic",      "type": ["null", "string"], "default": null }
+  ]
+}

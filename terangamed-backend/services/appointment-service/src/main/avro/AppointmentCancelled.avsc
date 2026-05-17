@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "AppointmentCancelled",
+  "namespace": "com.terangamed.appointment.event",
+  "doc": "Émis quand un RDV est annulé (par le patient ou le cabinet, avant la réalisation).",
+  "fields": [
+    { "name": "eventId",         "type": "string" },
+    { "name": "occurredAt",      "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "appointmentId",   "type": "long" },
+    { "name": "patientId",       "type": "long" },
+    { "name": "doctorId",        "type": "long" },
+    { "name": "originalStartTime", "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "cancelledBy",     "type": ["null", "string"], "default": null }
+  ]
+}

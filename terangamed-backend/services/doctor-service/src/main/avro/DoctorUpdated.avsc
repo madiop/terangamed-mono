@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "DoctorUpdated",
+  "namespace": "com.terangamed.doctor.event",
+  "doc": "Émis quand les informations d'un médecin sont modifiées (hors transitions de statut).",
+  "fields": [
+    { "name": "eventId",       "type": "string" },
+    { "name": "occurredAt",    "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "doctorId",      "type": "long" },
+    { "name": "licenseNumber", "type": "string" },
+    { "name": "lastName",      "type": "string" },
+    { "name": "firstName",     "type": "string" },
+    { "name": "specialty",     "type": "string" },
+    { "name": "email",         "type": ["null", "string"], "default": null },
+    { "name": "phone",         "type": ["null", "string"], "default": null },
+    { "name": "status",        "type": "string", "doc": "ACTIVE | ON_LEAVE | RETIRED" }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "keycloakIssuer": "${KEYCLOAK_ISSUER}",
+  "apiBaseUrl": "${API_BASE_URL}"
+}

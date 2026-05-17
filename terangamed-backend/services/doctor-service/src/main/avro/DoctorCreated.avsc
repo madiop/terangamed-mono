@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "DoctorCreated",
+  "namespace": "com.terangamed.doctor.event",
+  "doc": "Émis quand un nouveau médecin est ajouté au cabinet (statut initial : ACTIVE).",
+  "fields": [
+    { "name": "eventId",        "type": "string" },
+    { "name": "occurredAt",     "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "doctorId",       "type": "long" },
+    { "name": "licenseNumber",  "type": "string", "doc": "MED-YYYY-NNNNN" },
+    { "name": "lastName",       "type": "string" },
+    { "name": "firstName",      "type": "string" },
+    { "name": "specialty",      "type": "string" },
+    { "name": "email",          "type": ["null", "string"], "default": null },
+    { "name": "phone",          "type": ["null", "string"], "default": null }
+  ]
+}

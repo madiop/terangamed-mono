@@ -1,0 +1,51 @@
+<aside class="sidebar" role="navigation" aria-label="Navigation principale">
+  <!-- Logo -->
+  <div class="sidebar-logo">
+    <div class="logo-icon" aria-hidden="true">
+      <span class="material-icons-round">local_hospital</span>
+    </div>
+    <div class="logo-text">
+      <span class="logo-name">TerangaMed</span>
+      <span class="logo-tagline">Clinique Médicale</span>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="sidebar-nav">
+    <ul>
+      @for (item of visibleItems(); track item.route) {
+        <li>
+          <a
+            [routerLink]="item.route"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
+            class="nav-item"
+          >
+            <span class="material-icons-round nav-icon">{{ item.icon }}</span>
+            <span class="nav-label">{{ item.label }}</span>
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
+
+  <!-- Footer : profil utilisateur + logout -->
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="user-avatar">{{ initials() }}</div>
+      <div class="user-details">
+        <span class="user-name">{{ displayName() }}</span>
+        <span class="user-role">{{ roleLabel() }}</span>
+      </div>
+    </div>
+    <button
+      type="button"
+      class="logout-btn"
+      (click)="logout()"
+      title="Déconnexion"
+      aria-label="Se déconnecter"
+    >
+      <span class="material-icons-round">logout</span>
+    </button>
+  </div>
+</aside>

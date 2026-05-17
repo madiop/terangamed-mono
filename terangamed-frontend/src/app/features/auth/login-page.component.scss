@@ -1,0 +1,167 @@
+// Login page — formulaire intégré, design TerangaMed.
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  // Léger gradient bleuté en background
+  background: linear-gradient(135deg, #eef4fc 0%, #f1f5f9 100%);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 36px 32px;
+}
+
+// ───────── Branding ─────────
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 28px;
+
+  .brand-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+
+    .material-icons-round {
+      color: white;
+      font-size: 28px;
+    }
+  }
+
+  .brand-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .brand-tagline {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+}
+
+// ───────── Form ─────────
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .input-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--color-text-muted);
+    font-size: 20px;
+    pointer-events: none;
+  }
+
+  input {
+    width: 100%;
+    padding: 12px 14px 12px 42px;
+    border: 1.5px solid var(--color-border);
+    border-radius: 8px;
+    background: white;
+    font-size: 14px;
+    color: var(--color-text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+
+    &::placeholder { color: #94a3b8; }
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+    &:disabled { background: #f8fafc; cursor: not-allowed; }
+  }
+
+  .toggle-password {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+
+    &:hover { background: rgba(0, 0, 0, 0.04); color: var(--color-text); }
+    .material-icons-round { font-size: 20px; }
+  }
+}
+
+.field-error {
+  font-size: 12px;
+  color: var(--color-danger);
+  margin: 0;
+}
+
+// ───────── Erreur globale ─────────
+.login-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fee2e2;
+  border-radius: 8px;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 500;
+
+  .material-icons-round { font-size: 20px; }
+}
+
+// ───────── Submit ─────────
+.login-submit {
+  margin-top: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+
+  .spin {
+    animation: tm-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes tm-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+// ───────── Footer card ─────────
+.login-footer {
+  text-align: center;
+  font-size: 12px;
+  margin-top: 24px;
+}

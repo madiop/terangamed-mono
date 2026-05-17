@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — exclut du contexte Docker tout ce qui n'est PAS nécessaire au
+# build de l'image frontend. Sans ce fichier, `docker build` enverrait
+# `node_modules/` (plusieurs centaines de Mo) au daemon et invaliderait le cache
+# à chaque `npm install` local.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Dépendances installées localement (le builder Docker fait son propre `npm ci`)
+node_modules/
+
+# Build artifacts locaux
+dist/
+.angular/
+out-tsc/
+
+# Tests artefacts
+coverage/
+test-results/
+playwright-report/
+.nyc_output/
+
+# Cache npm
+.npm/
+.cache/
+.parcel-cache/
+
+# IDE / éditeur
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Système
+.DS_Store
+Thumbs.db
+*.log
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker (on ne builde pas Docker dans Docker)
+.dockerignore
+docker/
+
+# Documentation (pas nécessaire au build runtime)
+README.md
+CHANGELOG.md
+docs/
+
+# Variables d'env locales
+.env
+.env.local
+.env.*.local
+
+# Tests E2E Playwright (non requis pour le build prod)
+e2e/
+tests/
+
+# CI configs
+.github/

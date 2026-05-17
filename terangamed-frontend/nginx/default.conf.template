@@ -1,0 +1,115 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TerangaMed — Nginx config template
+#
+# Variables substituées au démarrage du container par
+# /docker-entrypoint.d/40-render-nginx-conf.sh (envsubst) :
+#   - ${API_BACKEND_URL}  : URL de l'api-gateway (default: http://api-gateway:8080)
+#
+# Routing :
+#   /api/*       → reverse-proxy vers ${API_BACKEND_URL}/api/*
+#   /actuator/*  → reverse-proxy aussi (utile pour /health depuis les outils)
+#   /            → SPA Angular (try_files avec fallback /index.html pour le routing client)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Upstream nommé pour profiter du DNS resolver Docker (résolution dynamique
+# au cas où l'IP du container api-gateway change pendant la durée de vie du
+# pod nginx). `valid=30s` force Nginx à re-résoudre le DNS toutes les 30s
+# au lieu de le mettre en cache jusqu'au reload.
+resolver 127.0.0.11 valid=30s ipv6=off;
+
+server {
+    # Dual-stack : IPv4 + IPv6. Indispensable pour que les healthchecks
+    # busybox (wget --spider) qui résolvent `localhost` en `::1` puissent se
+    # connecter, et plus généralement pour la portabilité des environnements
+    # cloud/Docker qui activent IPv6 par défaut (Docker 24+).
+    listen       80;
+    listen       [::]:80;
+    server_name  _;
+
+    # Logs en JSON (facilite l'ingestion par Loki/ELK en prod)
+    access_log /var/log/nginx/access.log main;
+    error_log  /var/log/nginx/error.log warn;
+
+    # Désactivation du token "nginx/x.y.z" dans les en-têtes pour réduire
+    # la surface d'info exposée aux scanners.
+    server_tokens off;
+
+    # Compression gzip pour réduire la taille des assets (JS bundle Angular)
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;
+
+    # ────────────────────────── Reverse-proxy /api/* ──────────────────────────
+    # `set` + variable forcent Nginx à utiliser le resolver DNS au runtime
+    # (sinon Nginx résout au boot et meurt si api-gateway n'est pas encore up).
+    location /api/ {
+        set $api_backend "${API_BACKEND_URL}";
+        proxy_pass $api_backend;
+
+        # Préserver les headers HTTP standard
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # Préserver l'Authorization Bearer JWT (essentiel pour la sécurité)
+        proxy_set_header Authorization $http_authorization;
+
+        # Timeouts généreux : certaines requêtes Feign cross-service peuvent
+        # prendre quelques secondes (Resilience4j retry inclus côté backend)
+        proxy_connect_timeout 5s;
+        proxy_send_timeout    30s;
+        proxy_read_timeout    30s;
+
+        # HTTP/1.1 pour permettre keep-alive avec l'upstream
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+
+    # ───────────────── Reverse-proxy /actuator/* (debug/monitoring) ───────────
+    # Optionnel : permet de checker /actuator/health depuis l'origine frontend.
+    # Le gateway lui-même expose ses propres /actuator/* — on route vers lui.
+    location /actuator/ {
+        set $api_backend "${API_BACKEND_URL}";
+        proxy_pass $api_backend;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout    10s;
+    }
+
+    # ────────────────────────── SPA Angular (fallback) ────────────────────────
+    location / {
+        root   /usr/share/nginx/html;
+        index  index.html;
+
+        # Important pour les SPA : si le path demandé n'existe pas en static
+        # (ex: /patients/42), on sert /index.html pour que le router Angular
+        # prenne le relais. Sans ça, F5 sur /patients/42 → 404 Nginx.
+        try_files $uri $uri/ /index.html;
+
+        # Cache long pour les assets fingerprinted (avec hash dans le nom)
+        # Angular génère des fichiers .[hash].js/css → cache illimité OK
+        location ~* \.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|ico)$ {
+            access_log off;
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # index.html ne doit PAS être caché (sinon les utilisateurs restent
+        # bloqués sur une ancienne version après deploy)
+        location = /index.html {
+            expires -1;
+            add_header Cache-Control "no-store, no-cache, must-revalidate";
+        }
+    }
+
+    # ────────────────────────── Pages d'erreur ────────────────────────────────
+    error_page 502 503 504 /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+        internal;
+    }
+}

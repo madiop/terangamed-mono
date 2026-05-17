@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  Logo placeholder pour le cabinet médical TerangaMed.
+  Croix médicale stylisée en bleu Teranga (#0d4f8b) sur fond blanc.
+  Override : monter un fichier différent via volume Docker ou variable CLINIC_LOGO.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+    <rect x="0" y="0" width="100" height="100" fill="#ffffff"/>
+    <circle cx="50" cy="50" r="45" fill="#0d4f8b"/>
+    <rect x="42" y="22" width="16" height="56" fill="#ffffff" rx="2"/>
+    <rect x="22" y="42" width="56" height="16" fill="#ffffff" rx="2"/>
+</svg>

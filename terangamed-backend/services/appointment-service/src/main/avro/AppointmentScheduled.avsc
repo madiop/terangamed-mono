@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "AppointmentScheduled",
+  "namespace": "com.terangamed.appointment.event",
+  "doc": "Émis quand un nouveau RDV est créé (statut PLANNED).",
+  "fields": [
+    { "name": "eventId",            "type": "string" },
+    { "name": "occurredAt",         "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "appointmentId",      "type": "long" },
+    { "name": "patientId",          "type": "long" },
+    { "name": "doctorId",           "type": "long" },
+    { "name": "patientNameSnapshot","type": "string" },
+    { "name": "doctorNameSnapshot", "type": "string" },
+    { "name": "startTime",          "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "endTime",            "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "durationMinutes",    "type": "int" },
+    { "name": "reason",             "type": ["null", "string"], "default": null }
+  ]
+}

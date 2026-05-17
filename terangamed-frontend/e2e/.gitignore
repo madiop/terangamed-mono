@@ -1,0 +1,9 @@
+# Artefacts générés par Playwright — jamais committés
+.auth/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Traces et vidéos générées par les runs en échec
+*.zip
+*.webm

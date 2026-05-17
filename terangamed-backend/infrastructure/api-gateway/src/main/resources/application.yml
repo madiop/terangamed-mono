@@ -1,0 +1,244 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+
+  # Pattern moderne d'import du Config Server (optional → ne fail-fast pas)
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
+
+  cloud:
+    config:
+      username: ${CONFIG_SERVER_USER:config}
+      password: ${CONFIG_SERVER_PASSWORD:config}
+      fail-fast: false
+
+    gateway:
+      # Routes EXPLICITES (pas de discovery.locator) — meilleur contrôle, prédictibilité,
+      # et exposition limitée des services internes.
+      discovery:
+        locator:
+          enabled: false
+
+      # CORS global — applicable à toutes les routes
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - ${FRONTEND_ORIGIN:http://localhost:4200}
+            allowedMethods: [GET, POST, PUT, DELETE, PATCH, OPTIONS]
+            allowedHeaders:
+              - Authorization
+              - Content-Type
+              - X-Correlation-Id
+              - Accept
+              - Origin
+            exposedHeaders:
+              - X-Correlation-Id
+            allowCredentials: true
+            maxAge: 3600
+
+      routes:
+        # ─────────── patient-service ───────────
+        - id: patient-service
+          uri: lb://patient-service
+          predicates:
+            - Path=/api/patients/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: patient-service-cb
+                fallbackUri: forward:/fallback/patient-service
+
+        # ─────────── doctor-service ───────────
+        - id: doctor-service
+          uri: lb://doctor-service
+          predicates:
+            - Path=/api/doctors/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: doctor-service-cb
+                fallbackUri: forward:/fallback/doctor-service
+
+        # ─────────── appointment-service ───────────
+        - id: appointment-service
+          uri: lb://appointment-service
+          predicates:
+            - Path=/api/appointments/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: appointment-service-cb
+                fallbackUri: forward:/fallback/appointment-service
+
+        # ─────────── medical-record-service ───────────
+        # Sert 4 ressources : dossiers, antécédents, consultations, ordonnances.
+        - id: medical-record-service
+          uri: lb://medical-record-service
+          predicates:
+            - Path=/api/medical-records/**,/api/antecedents/**,/api/consultations/**,/api/prescriptions/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: medical-record-service-cb
+                fallbackUri: forward:/fallback/medical-record-service
+
+        # ─────────── billing-service ───────────
+        - id: billing-service
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/invoices/**,/api/payments/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: billing-service-cb
+                fallbackUri: forward:/fallback/billing-service
+
+        # ─────────── notification-service (étape 8.5) ───────────
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: notification-service-cb
+                fallbackUri: forward:/fallback/notification-service
+
+        # ─────────── Swagger / OpenAPI agrégation (utile pour Step 9) ───────────
+        - id: openapi-patient
+          uri: lb://patient-service
+          predicates:
+            - Path=/api-docs/patient-service/**
+          filters:
+            - RewritePath=/api-docs/patient-service/(?<segment>.*), /$\{segment}
+
+  # Resource Server JWT — issuer Keycloak surchargé par profil docker
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/terangamed/protocol/openid-connect/certs}
+
+terangamed:
+  security:
+    jwt:
+      principal-attribute: preferred_username
+      resource-id: terangamed-backend
+
+# Eureka client (URL avec credentials — surchargeables par env vars en prod)
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:${EUREKA_PORT:8761}/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+
+# Configuration Resilience4j — circuit breaker par service downstream
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 20
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+    instances:
+      patient-service-cb:
+        base-config: default
+      doctor-service-cb:
+        base-config: default
+      appointment-service-cb:
+        base-config: default
+      medical-record-service-cb:
+        base-config: default
+      billing-service-cb:
+        base-config: default
+      notification-service-cb:
+        base-config: default
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
+        cancel-running-future: true
+    instances:
+      patient-service-cb:
+        base-config: default
+      doctor-service-cb:
+        base-config: default
+      appointment-service-cb:
+        base-config: default
+      medical-record-service-cb:
+        base-config: default
+      billing-service-cb:
+        base-config: default
+      notification-service-cb:
+        base-config: default
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,prometheus,circuitbreakers,circuitbreakerevents
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    gateway:
+      enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    circuitbreakers:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.terangamed: DEBUG
+    org.springframework.cloud.gateway: INFO
+    org.springframework.security: INFO
+    reactor.netty: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+# Profil docker : hostnames Docker, Keycloak interne
+spring:
+  config:
+    activate:
+      on-profile: docker
+    import: optional:configserver:http://config-server:8888
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - http://localhost:4200
+              - http://terangamed-frontend
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Sans issuer-uri pour cohérence avec backend services :
+          # le browser obtient un token avec iss=http://localhost:8180/...
+          # alors que le gateway accède à Keycloak via http://keycloak:8180/...
+          # → mismatch garanti. Validation signature uniquement via JWKS.
+          jwk-set-uri: http://keycloak:8180/realms/terangamed/protocol/openid-connect/certs
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@discovery-server:8761/eureka/

@@ -1,0 +1,224 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// TerangaMed — styles globaux
+// 1. Material 17 theming custom (palette alignée sur design existant)
+// 2. Design tokens CSS variables (--color-*)
+// 3. Tailwind directives
+// 4. Reset / utilitaires globaux
+// ─────────────────────────────────────────────────────────────────────────────
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+// Palette primary — bleu #3b82f6 (blue-500 Tailwind)
+$tm-primary-palette: (
+  50:  #EFF6FF,
+  100: #DBEAFE,
+  200: #BFDBFE,
+  300: #93C5FD,
+  400: #60A5FA,
+  500: #3B82F6,
+  600: #2563EB,
+  700: #1D4ED8,
+  800: #1E40AF,
+  900: #1E3A5F,
+  contrast: (
+    50: rgba(black, 0.87), 100: rgba(black, 0.87), 200: rgba(black, 0.87),
+    300: rgba(black, 0.87), 400: rgba(black, 0.87),
+    500: white, 600: white, 700: white, 800: white, 900: white
+  )
+);
+
+$tm-accent-palette: (
+  50:  #ECFDF5, 100: #D1FAE5, 200: #A7F3D0, 300: #6EE7B7, 400: #34D399,
+  500: #10B981, 600: #059669, 700: #047857, 800: #065F46, 900: #064E3B,
+  contrast: (
+    50: rgba(black, 0.87), 100: rgba(black, 0.87), 200: rgba(black, 0.87),
+    300: rgba(black, 0.87), 400: rgba(black, 0.87),
+    500: white, 600: white, 700: white, 800: white, 900: white
+  )
+);
+
+$tm-warn-palette: (
+  50: #FEF2F2, 100: #FEE2E2, 200: #FECACA, 300: #FCA5A5, 400: #F87171,
+  500: #EF4444, 600: #DC2626, 700: #B91C1C, 800: #991B1B, 900: #7F1D1D,
+  contrast: (
+    50: rgba(black, 0.87), 100: rgba(black, 0.87), 200: rgba(black, 0.87),
+    300: rgba(black, 0.87), 400: rgba(black, 0.87),
+    500: white, 600: white, 700: white, 800: white, 900: white
+  )
+);
+
+$tm-primary: mat.define-palette($tm-primary-palette);
+$tm-accent:  mat.define-palette($tm-accent-palette);
+$tm-warn:    mat.define-palette($tm-warn-palette);
+
+$tm-typography: mat.define-typography-config(
+  $font-family: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+);
+
+$tm-theme: mat.define-light-theme((
+  color: (primary: $tm-primary, accent: $tm-accent, warn: $tm-warn),
+  typography: $tm-typography,
+  density: 0
+));
+
+@include mat.all-component-themes($tm-theme);
+
+// ─── Tailwind directives ────────────────────────────────────────────────────
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// ─── CSS variables (tokens design — partage Tailwind ↔ Material) ───────────
+:root {
+  // Couleurs métier — alignées sur le design Clinique TerangaMed
+  --color-primary:    #3b82f6;
+  --color-primary-dk: #2563eb;
+  --color-success:    #10b981;
+  --color-warning:    #f59e0b;
+  --color-danger:     #ef4444;
+  --color-gray:       #64748b;
+  --color-text:       #0f172a;
+  --color-text-muted: #64748b;
+  --color-bg:         #f1f5f9;
+  --color-surface:    #ffffff;
+  --color-border:     #e2e8f0;
+
+  // Sidebar — bleu TerangaMed (test #2963b0)
+  --color-sidebar-bg:         #2963b0;
+  --color-sidebar-text:       #e2e8f0;
+  --color-sidebar-text-muted: #b3c7e3;
+  --color-sidebar-icon:       #94aed1;
+
+  // Layout
+  --sidebar-width:   260px;
+  --radius:          14px;
+  --shadow:          0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-md:       0 4px 12px rgba(0, 0, 0, 0.10);
+}
+
+// ─── Globals / reset ────────────────────────────────────────────────────────
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.3;
+}
+p { margin: 0; line-height: 1.6; }
+a { color: var(--color-primary); }
+
+// Material Icons Round (chargées dans index.html)
+.material-icons-round {
+  font-family: 'Material Icons Round', 'Material Icons';
+  font-size: 20px;
+  user-select: none;
+  font-weight: normal;
+  font-style: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+}
+
+// Focus ring (accessibility)
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+// Scrollbar discrète
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+// ─── Utilities partagés ─────────────────────────────────────────────────────
+.text-muted   { color: var(--color-text-muted); }
+.text-primary { color: var(--color-primary); }
+.text-success { color: var(--color-success); }
+.text-danger  { color: var(--color-danger);  }
+.text-warning { color: var(--color-warning); }
+
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ─── Cards / Buttons / Badges ───────────────────────────────────────────────
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+  .material-icons-round { font-size: 1.125rem; }
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
+  &:hover:not(:disabled) {
+    background: var(--color-primary-dk);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-primary);
+  &:hover:not(:disabled) { background: rgba(59, 130, 246, 0.05); }
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+.badge-active   { background: #d1fae5; color: #065f46; }
+.badge-on_leave { background: #fef3c7; color: #92400e; }
+.badge-inactive { background: #e2e8f0; color: #475569; }
+.badge-pending  { background: #fef3c7; color: #92400e; }
+.badge-approved { background: #d1fae5; color: #065f46; }
+.badge-rejected { background: #fee2e2; color: #991b1b; }

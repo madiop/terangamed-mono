@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "AppointmentCompleted",
+  "namespace": "com.terangamed.appointment.event",
+  "doc": "Émis quand un RDV est complété (CONFIRMED → COMPLETED). Déclenche la création de consultation médicale dans medical-record-service + facturation.",
+  "fields": [
+    { "name": "eventId",       "type": "string" },
+    { "name": "occurredAt",    "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "appointmentId", "type": "long" },
+    { "name": "patientId",     "type": "long" },
+    { "name": "doctorId",      "type": "long" },
+    { "name": "completedBy",   "type": ["null", "string"], "default": null }
+  ]
+}

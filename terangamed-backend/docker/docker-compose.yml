@@ -1,0 +1,617 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TerangaMed — docker-compose progressif (étape 8.1)
+#
+# Services inclus à ce stade :
+#   • PostgreSQL 16 (multi-DB)
+#   • Keycloak 24 (realm 'terangamed' importé)
+#   • Kafka (KRaft, sans Zookeeper) + Schema Registry + Kafka UI
+#   • Config Server (port 8888)
+#   • Discovery Server / Eureka (port 8761)
+#   • API Gateway (port 8080)
+#   • patient-service (8081), doctor-service (8082)
+#   • appointment-service (8083), medical-record-service (8084)
+#
+# Démarrage :
+#   cd terangamed-backend/docker
+#   cp .env.example .env       # une seule fois
+#   docker compose up -d
+#
+# Suivre les logs :
+#   docker compose logs -f patient-service
+#
+# Arrêt + suppression données :
+#   docker compose down -v
+#
+# Build forcé d'un service :
+#   docker compose build patient-service
+#   docker compose up -d patient-service
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: terangamed
+
+services:
+
+  # ──────────────────────── PostgreSQL ────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: terangamed-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-terangamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terangamed}
+    ports:
+      - "${POSTGRES_BIND_HOST:-127.0.0.1}:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/01-create-databases.sql:/docker-entrypoint-initdb.d/01-create-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-terangamed}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── Keycloak 24 ────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: terangamed-keycloak
+    command: ["start-dev", "--import-realm", "--http-port=8180"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-terangamed}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-terangamed}
+      KC_HTTP_PORT: 8180
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_CACHE: local
+    ports:
+      - "${KEYCLOAK_BIND_HOST:-127.0.0.1}:${KEYCLOAK_HOST_PORT:-8180}:8180"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/terangamed-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8180 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── Kafka (KRaft, sans Zookeeper) ────────────────────────
+  # Confluent Platform 7.6 = Kafka 3.6+ → KRaft production-ready.
+  # Single broker dev — replication-factor=1, à scaler en prod.
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: terangamed-kafka
+    environment:
+      # Identité du nœud — combine rôles broker + controller (KRaft single-node)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      # Listeners :
+      #  - PLAINTEXT (9092)         → trafic interne Docker network (services Spring)
+      #  - CONTROLLER (9093)        → quorum KRaft
+      #  - PLAINTEXT_HOST (29092)   → trafic depuis l'hôte (IDE, kafka-cli local)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # Replication-factor=1 (single broker) — à augmenter en prod.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      # Désactive l'auto-création — les topics sont explicitement créés par kafka-init
+      # (pratique production : éviter les topics fantômes typés sur la première écriture).
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+
+      # Cluster ID stable (KRaft) — défini en .env. NE PAS CHANGER après premier démarrage
+      # (le volume kafka-data garde son log avec ce CLUSTER_ID).
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+    ports:
+      - "${KAFKA_BIND_HOST:-127.0.0.1}:${KAFKA_HOST_PORT:-29092}:29092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      # cub kafka-ready vérifie que le broker répond au protocole Kafka
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── Kafka init — création des topics primaires ────────────────────────
+  # Container "one-shot" : crée les 4 topics applicatifs primaires (patient/doctor/
+  # appointment/medical events), puis exit 0. Pas de healthcheck — c'est un job,
+  # pas un service long-running. Pattern courant pour garantir un état initial
+  # reproductible et éviter les topics fantômes typés sur la première écriture
+  # (auto-create désactivé côté broker — cf. KAFKA_AUTO_CREATE_TOPICS_ENABLE).
+  #
+  # ⚠️ DLT et retry-topics : NE PAS les créer ici.
+  # Le notification-service utilise @RetryableTopic(autoCreateTopics="true") qui
+  # gère lui-même la création des topics annexes (...-retry-1000, ...-retry-2000,
+  # ...-dlt) au démarrage via KafkaAdmin. La convention Spring Kafka utilise un
+  # suffixe `-dlt` minuscules ; tenter d'en créer ici avec `.DLT` MAJUSCULES
+  # créait des topics fantômes jamais consommés (cf. correctif 2026-05-09).
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: terangamed-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -euo pipefail
+        echo "Création des topics primaires TerangaMed..."
+
+        # Topics métier (3 partitions pour parallélisme par entityId — clé de partition)
+        for topic in \
+            terangamed.patient.events \
+            terangamed.doctor.events \
+            terangamed.appointment.events \
+            terangamed.medical.events; do
+          kafka-topics --bootstrap-server kafka:9092 \
+            --create --if-not-exists \
+            --topic "$$topic" \
+            --partitions 3 \
+            --replication-factor 1 \
+            --config retention.ms=2592000000 \
+            --config cleanup.policy=delete
+          echo "  ✓ $$topic"
+        done
+
+        echo "Topics primaires prêts. Les retry-topics et DLT sont créés"
+        echo "automatiquement par notification-service au démarrage."
+        echo "Liste finale :"
+        kafka-topics --bootstrap-server kafka:9092 --list | sort
+    networks:
+      - terangamed-net
+    restart: "no"
+
+  # ──────────────────────── Confluent Schema Registry (Avro) ────────────────────────
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.1
+    container_name: terangamed-schema-registry
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8085
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      # Compatibilité par défaut : BACKWARD (consumers tolèrent l'ajout de champs optionnels)
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward
+    ports:
+      - "${SCHEMA_REGISTRY_BIND_HOST:-127.0.0.1}:${SCHEMA_REGISTRY_HOST_PORT:-8085}:8085"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8085/subjects || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── Kafka UI (Provectus) ────────────────────────
+  # UI web pour visualiser topics, messages, consumer groups, schemas. Dev uniquement.
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: terangamed-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: terangamed
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8085
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      AUTH_TYPE: DISABLED      # Dev uniquement — sécuriser via reverse-proxy en prod
+    ports:
+      - "${KAFKA_UI_BIND_HOST:-127.0.0.1}:${KAFKA_UI_HOST_PORT:-8090}:8080"
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── MinIO (stockage objet S3-compatible) ────────────────────────
+  # Utilisé par medical-record-service pour stocker les PDFs d'ordonnances générés
+  # (cache idempotent — clé d'objet = hash du contenu, voir PrescriptionPdfService).
+  #
+  # MinIO expose deux ports :
+  #  - 9000 : API S3 (utilisée par les services Java via le client minio-java)
+  #  - 9001 : Console web admin (debug — http://localhost:9001, login = ROOT_USER/ROOT_PASSWORD)
+  #
+  # Le bucket "terangamed-prescriptions" est créé automatiquement par
+  # medical-record-service au démarrage (MinioConfig#initBucket, idempotent).
+  # → Pas besoin d'un container init type "mc mb" ici.
+  #
+  # Healthcheck : endpoint natif /minio/health/live (réponse 200 quand le serveur est ready).
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: terangamed-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-terangamed}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-terangamed-secret-2026}
+      # Région cosmétique — MinIO ne valide pas mais minio-java l'attend pour signer
+      MINIO_REGION: us-east-1
+    ports:
+      - "${MINIO_API_BIND_HOST:-127.0.0.1}:${MINIO_API_HOST_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_BIND_HOST:-127.0.0.1}:${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── Config Server ────────────────────────
+  config-server:
+    build:
+      context: ..
+      dockerfile: infrastructure/config-server/Dockerfile
+    image: terangamed/config-server:1.0.0
+    container_name: terangamed-config-server
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,native
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER:-config}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD:-config}
+    ports:
+      - "127.0.0.1:8888:8888"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8888/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── Discovery Server / Eureka ────────────────────────
+  discovery-server:
+    build:
+      context: ..
+      dockerfile: infrastructure/discovery-server/Dockerfile
+    image: terangamed/discovery-server:1.0.0
+    container_name: terangamed-discovery-server
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      CONFIG_SERVER_URL: http://config-server:8888
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER:-config}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD:-config}
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:-eureka}
+    ports:
+      - "127.0.0.1:8761:8761"
+    depends_on:
+      config-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8761/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── API Gateway ────────────────────────
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: infrastructure/api-gateway/Dockerfile
+    image: terangamed/api-gateway:1.0.0
+    container_name: terangamed-api-gateway
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      CONFIG_SERVER_URL: http://config-server:8888
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER:-config}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD:-config}
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:-eureka}
+      KEYCLOAK_ISSUER_URI: http://keycloak:8180/realms/terangamed
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:4200}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── appointment-service ────────────────────────
+  appointment-service:
+    build:
+      context: ..
+      dockerfile: services/appointment-service/Dockerfile
+    image: terangamed/appointment-service:1.0.0
+    container_name: terangamed-appointment-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,dev   # 'dev' active le seed V900 (RDV fictifs)
+      CONFIG_SERVER_URL: http://config-server:8888
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER:-config}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD:-config}
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:-eureka}
+      POSTGRES_USER: ${POSTGRES_USER:-terangamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terangamed}
+      KEYCLOAK_ISSUER_URI: http://keycloak:8180/realms/terangamed
+    ports:
+      - "127.0.0.1:8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      patient-service:
+        condition: service_healthy
+      doctor-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── doctor-service ────────────────────────
+  doctor-service:
+    build:
+      context: ..
+      dockerfile: services/doctor-service/Dockerfile
+    image: terangamed/doctor-service:1.0.0
+    container_name: terangamed-doctor-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,dev
+      CONFIG_SERVER_URL: http://config-server:8888
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER:-config}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD:-config}
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:-eureka}
+      POSTGRES_USER: ${POSTGRES_USER:-terangamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terangamed}
+      KEYCLOAK_ISSUER_URI: http://keycloak:8180/realms/terangamed
+    ports:
+      - "127.0.0.1:8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── patient-service ────────────────────────
+  patient-service:
+    build:
+      context: ..
+      dockerfile: services/patient-service/Dockerfile
+    image: terangamed/patient-service:1.0.0
+    container_name: terangamed-patient-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,dev   # 'dev' active le seed de patients fictifs
+      CONFIG_SERVER_URL: http://config-server:8888
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER:-config}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD:-config}
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:-eureka}
+      POSTGRES_USER: ${POSTGRES_USER:-terangamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terangamed}
+      KEYCLOAK_ISSUER_URI: http://keycloak:8180/realms/terangamed
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      # Producer Kafka — l'OutboxRelay scheduler a besoin de Kafka + Schema Registry
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── medical-record-service ────────────────────────
+  medical-record-service:
+    build:
+      context: ..
+      dockerfile: services/medical-record-service/Dockerfile
+    image: terangamed/medical-record-service:1.0.0
+    container_name: terangamed-medical-record-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,dev   # 'dev' active le seed V900
+      CONFIG_SERVER_URL: http://config-server:8888
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER:-config}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD:-config}
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:-eureka}
+      POSTGRES_USER: ${POSTGRES_USER:-terangamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terangamed}
+      KEYCLOAK_ISSUER_URI: http://keycloak:8180/realms/terangamed
+      # ── Stockage PDFs ordonnances (MinIO S3-compatible) ──
+      # L'URL utilise le nom de service Docker (minio) — résolu via le réseau terangamed-net.
+      # Les credentials sont identiques à ceux du root MinIO en dev ; en prod, créer un
+      # service-account dédié avec policy restreinte au bucket des ordonnances.
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-terangamed}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-terangamed-secret-2026}
+      MINIO_PRESCRIPTION_BUCKET: ${MINIO_PRESCRIPTION_BUCKET:-terangamed-prescriptions}
+      # ── En-tête cabinet imprimé sur le PDF ──
+      # Override par déploiement (clinique cliente). Valeurs par défaut = cabinet démo.
+      CLINIC_NAME: ${CLINIC_NAME:-Cabinet Médical TerangaMed}
+      CLINIC_ADDRESS_1: ${CLINIC_ADDRESS_1:-Avenue Cheikh Anta Diop}
+      CLINIC_ADDRESS_2: ${CLINIC_ADDRESS_2:-Dakar, Sénégal}
+      CLINIC_PHONE: ${CLINIC_PHONE:-+221 33 000 00 00}
+      CLINIC_EMAIL: ${CLINIC_EMAIL:-contact@terangamed.sn}
+      # URL publique utilisée pour le QR code de vérification d'ordonnance.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:4200}
+    ports:
+      - "127.0.0.1:8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      patient-service:
+        condition: service_healthy
+      doctor-service:
+        condition: service_healthy
+      appointment-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    networks:
+      - terangamed-net
+
+  # ──────────────────────── notification-service ────────────────────────
+  notification-service:
+    build:
+      context: ..
+      dockerfile: services/notification-service/Dockerfile
+    image: terangamed/notification-service:1.0.0
+    container_name: terangamed-notification-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      CONFIG_SERVER_URL: http://config-server:8888
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER:-config}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD:-config}
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:-eureka}
+      POSTGRES_USER: ${POSTGRES_USER:-terangamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terangamed}
+      KEYCLOAK_ISSUER_URI: http://keycloak:8180/realms/terangamed
+    ports:
+      - "127.0.0.1:8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8086/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    networks:
+      - terangamed-net
+
+volumes:
+  postgres-data:
+    name: terangamed-postgres-data
+  kafka-data:
+    name: terangamed-kafka-data
+  # Données MinIO — PDFs d'ordonnances persistés.
+  # ⚠️ NE PAS supprimer en prod : contient les ordonnances déjà imprimées
+  # (audit légal — durée de conservation médicale Sénégal = 10 ans minimum).
+  minio-data:
+    name: terangamed-minio-data
+
+networks:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Réseau partagé backend ↔ frontend.
+  #
+  # `external: true` → le réseau est géré HORS des stacks (créé manuellement
+  # par `docker network create terangamed-net`, ou par n'importe quel script
+  # smoke/init au pré-check). Le compose backend ET le compose frontend
+  # (`terangamed-frontend/docker/docker-compose.yml`) le déclarent tous les
+  # deux en `external: true` → aucun conflit de labels Compose, indépendance
+  # totale des cycles de vie.
+  #
+  # Si le réseau n'existe pas au `docker compose up`, Compose échoue avec :
+  #   "network terangamed-net declared as external, but could not be found"
+  # → créer manuellement : `docker network create terangamed-net`
+  # ─────────────────────────────────────────────────────────────────────────
+  terangamed-net:
+    external: true
+    name: terangamed-net

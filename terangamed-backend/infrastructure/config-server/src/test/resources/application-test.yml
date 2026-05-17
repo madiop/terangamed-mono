@@ -1,0 +1,23 @@
+server:
+  port: 0  # port aléatoire pour éviter les conflits
+
+spring:
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: classpath:/config-repo/
+  security:
+    user:
+      name: testuser
+      password: testpass
+
+eureka:
+  client:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

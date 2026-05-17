@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "PatientCreated",
+  "namespace": "com.terangamed.patient.event",
+  "doc": "Émis quand un nouveau patient est créé. Topic terangamed.patient.events.",
+  "fields": [
+    { "name": "eventId",         "type": "string", "doc": "UUID unique de l'event (déduplication)" },
+    { "name": "occurredAt",      "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "Horodatage UTC" },
+    { "name": "patientId",       "type": "long",   "doc": "ID technique patient-service" },
+    { "name": "medicalRecordNumber", "type": "string", "doc": "MR-YYYY-NNNNN" },
+    { "name": "lastName",        "type": "string" },
+    { "name": "firstName",       "type": "string" },
+    { "name": "email",           "type": ["null", "string"], "default": null },
+    { "name": "phone",           "type": ["null", "string"], "default": null },
+    { "name": "keycloakSubject", "type": ["null", "string"], "default": null, "doc": "JWT sub si l'enrôlement vient d'un signup utilisateur" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "ConsultationCreated",
+  "namespace": "com.terangamed.medical.event",
+  "doc": "Émis quand un médecin crée une nouvelle consultation. Statut initial : non signée.",
+  "fields": [
+    { "name": "eventId",         "type": "string" },
+    { "name": "occurredAt",      "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "consultationId",  "type": "long" },
+    { "name": "medicalRecordId", "type": "long" },
+    { "name": "patientId",       "type": "long", "doc": "Résolu côté service à partir du dossier" },
+    { "name": "doctorId",        "type": "long" },
+    { "name": "appointmentId",   "type": ["null", "long"], "default": null },
+    { "name": "consultationDate", "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "createdBy",       "type": ["null", "string"], "default": null }
+  ]
+}

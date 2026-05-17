@@ -1,0 +1,143 @@
+server:
+  port: ${SERVER_PORT:8084}
+
+spring:
+  application:
+    name: medical-record-service
+
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
+
+  cloud:
+    config:
+      username: ${CONFIG_SERVER_USER:config}
+      password: ${CONFIG_SERVER_PASSWORD:config}
+      fail-fast: false
+
+  datasource:
+    url: ${MEDICAL_RECORD_DB_URL:jdbc:postgresql://localhost:5432/medical_record_db}
+    username: ${POSTGRES_USER:terangamed}
+    password: ${POSTGRES_PASSWORD:terangamed}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/terangamed/protocol/openid-connect/certs}
+
+terangamed:
+  security:
+    jwt:
+      principal-attribute: preferred_username
+      resource-id: terangamed-backend
+
+  swagger:
+    oauth2:
+      authorization-url: ${KEYCLOAK_AUTH_URL:http://localhost:8180/realms/terangamed/protocol/openid-connect/auth}
+      token-url: ${KEYCLOAK_TOKEN_URL:http://localhost:8180/realms/terangamed/protocol/openid-connect/token}
+
+  # ─── Génération PDF d'ordonnances ────────────────────────────────────────
+  # Storage MinIO (S3-compatible) — cache idempotent par hash de contenu.
+  # Bucket créé automatiquement au démarrage si absent (auto-create-bucket).
+  pdf:
+    storage:
+      minio:
+        endpoint: ${MINIO_URL:http://localhost:9000}
+        access-key: ${MINIO_ACCESS_KEY:terangamed}
+        secret-key: ${MINIO_SECRET_KEY:terangamed-secret-2026}
+        bucket: ${MINIO_PRESCRIPTION_BUCKET:terangamed-prescriptions}
+        auto-create-bucket: true
+        region: us-east-1
+
+  # En-tête cabinet imprimé sur chaque ordonnance PDF. Override par déploiement.
+  clinic:
+    name: ${CLINIC_NAME:Cabinet Médical TerangaMed}
+    address-line-1: ${CLINIC_ADDRESS_1:Avenue Cheikh Anta Diop}
+    address-line-2: ${CLINIC_ADDRESS_2:Dakar, Sénégal}
+    phone: ${CLINIC_PHONE:+221 33 000 00 00}
+    email: ${CLINIC_EMAIL:contact@terangamed.sn}
+    logo-classpath: ${CLINIC_LOGO:classpath:static/pdf/clinic-logo.svg}
+
+  # URL publique pour le QR code de vérification d'ordonnance.
+  # En dev = frontend Angular local ; en prod = domaine du cabinet.
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:4200}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    oauth:
+      client-id: swagger-ui
+      use-pkce-with-authorization-code-grant: true
+      scopes: openid,profile,email
+    csrf:
+      enabled: false
+    operationsSorter: method
+    tagsSorter: alpha
+  show-actuator: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.terangamed: DEBUG
+    org.hibernate.SQL: WARN
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+    import: optional:configserver:http://config-server:8888
+  datasource:
+    url: jdbc:postgresql://postgres:5432/medical_record_db
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://keycloak:8180/realms/terangamed/protocol/openid-connect/certs
+
+terangamed:
+  swagger:
+    oauth2:
+      authorization-url: http://localhost:8180/realms/terangamed/protocol/openid-connect/auth
+      token-url: http://localhost:8180/realms/terangamed/protocol/openid-connect/token
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@discovery-server:8761/eureka/

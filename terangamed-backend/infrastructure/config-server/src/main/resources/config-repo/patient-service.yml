@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration spécifique patient-service.
+# Hérite de config-repo/application.yml (commun à tous les services) et override
+# uniquement les éléments propres au service.
+# ─────────────────────────────────────────────────────────────────────────────
+
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: ${PATIENT_DB_URL:jdbc:postgresql://localhost:5432/patient_db}
+    hikari:
+      pool-name: patient-service-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    properties:
+      hibernate:
+        # tuning batch pour patient-service (créations en lot possibles)
+        jdbc:
+          batch_size: 30
+        order_inserts: true
+        order_updates: true
+
+# Logs spécifiques
+logging:
+  level:
+    com.terangamed.patient: DEBUG
+    com.terangamed.patient.specification: TRACE  # voir les Specifications appliquées
+    org.hibernate.orm.jdbc.bind: WARN
+
+# Endpoints actuator additionnels exposés sur ce service
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,flyway
+
+---
+# ───── Profil docker ─────
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/patient_db
+
+---
+# ───── Profil dev (seed data activé) ─────
+spring:
+  config:
+    activate:
+      on-profile: dev
+  flyway:
+    locations: classpath:db/migration,classpath:db/migration/common,classpath:db/migration-dev

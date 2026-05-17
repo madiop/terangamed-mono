@@ -1,0 +1,31 @@
+# Configuration spécifique notification-service.
+
+server:
+  port: 8086
+
+spring:
+  datasource:
+    url: ${NOTIFICATION_DB_URL:jdbc:postgresql://localhost:5432/notification_db}
+    hikari:
+      pool-name: notification-service-pool
+      maximum-pool-size: 8
+      minimum-idle: 2
+
+logging:
+  level:
+    com.terangamed.notification: DEBUG
+    org.springframework.kafka: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,flyway
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/notification_db

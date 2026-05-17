@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "AppointmentNoShow",
+  "namespace": "com.terangamed.appointment.event",
+  "doc": "Émis quand le patient ne s'est pas présenté à un RDV CONFIRMED. Peut déclencher des règles métier (ex: alerte, facturation partielle).",
+  "fields": [
+    { "name": "eventId",       "type": "string" },
+    { "name": "occurredAt",    "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "appointmentId", "type": "long" },
+    { "name": "patientId",     "type": "long" },
+    { "name": "doctorId",      "type": "long" },
+    { "name": "missedAt",      "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "markedBy",      "type": ["null", "string"], "default": null }
+  ]
+}

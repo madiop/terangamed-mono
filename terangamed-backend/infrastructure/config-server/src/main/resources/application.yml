@@ -1,0 +1,45 @@
+server:
+  port: ${SERVER_PORT:8888}
+
+spring:
+  application:
+    name: config-server
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:native}
+  cloud:
+    config:
+      server:
+        native:
+          # Recherche multi-emplacements : classpath (configs versionnées avec le code)
+          # + dossier externe optionnel (overrides en prod, ex: secrets montés via K8s)
+          search-locations: classpath:/config-repo/,file:./config-repo/
+        # Permet aux clients de récupérer les configurations cryptées si activé un jour
+        accept-empty: true
+  security:
+    user:
+      name: ${CONFIG_SERVER_USER:config}
+      password: ${CONFIG_SERVER_PASSWORD:config}
+      roles: CONFIG_CLIENT
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.config: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

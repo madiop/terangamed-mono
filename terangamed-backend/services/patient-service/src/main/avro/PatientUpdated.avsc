@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "PatientUpdated",
+  "namespace": "com.terangamed.patient.event",
+  "doc": "Émis quand un patient est modifié. On envoie l'état complet pour faciliter les consumers (CQRS read-model, snapshots, audit).",
+  "fields": [
+    { "name": "eventId",             "type": "string" },
+    { "name": "occurredAt",          "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "patientId",           "type": "long" },
+    { "name": "medicalRecordNumber", "type": "string" },
+    { "name": "lastName",            "type": "string" },
+    { "name": "firstName",           "type": "string" },
+    { "name": "email",               "type": ["null", "string"], "default": null },
+    { "name": "phone",               "type": ["null", "string"], "default": null },
+    { "name": "status",              "type": "string", "doc": "ACTIVE | ARCHIVED" }
+  ]
+}

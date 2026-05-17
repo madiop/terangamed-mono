@@ -1,0 +1,225 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration COMMUNE à tous les microservices TerangaMed.
+# Chaque service hérite de ces paramètres et peut les surcharger dans son
+# propre fichier ({service}.yml ou {service}-{profile}.yml).
+#
+# IMPORTANT : SnakeYAML 2.x (Spring Boot 3.x) refuse les clés top-level
+# dupliquées. UN SEUL bloc 'spring:' et UN SEUL bloc 'terangamed:' dans ce
+# fichier — toutes les sous-sections doivent être imbriquées dedans.
+# ─────────────────────────────────────────────────────────────────────────────
+
+spring:
+  # ─── JPA / Hibernate ───
+  # Aucune génération de schéma automatique : Flyway gère les migrations
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+          batch_size: 30
+        order_inserts: true
+        order_updates: true
+
+  # ─── Datasource (HikariCP) ───
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+      idle-timeout: 300000
+
+  # ─── Flyway — migrations versionnées, jamais ddl-auto ───
+  # 'classpath:db/migration/common' = scripts fournis par common-lib (ex: V100 outbox_events).
+  # Convention : services 1..99, common 100..199, seeds 900+.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    # out-of-order=true : autorise l'application d'une migration de version
+    # inférieure à une autre déjà appliquée. Indispensable quand common-lib
+    # ajoute V100 alors qu'un service a déjà appliqué V200 (cas typique
+    # d'évolution incrémentale). À ne PAS activer en prod sans réflexion.
+    out-of-order: true
+    locations: classpath:db/migration,classpath:db/migration/common
+
+  # ─── Sérialisation JSON — formats stables et lisibles ───
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+      write-durations-as-timestamps: false
+
+  # ─── Kafka (étape 8) — défauts partagés par tous les microservices ───
+  # Override possible par service dans son {service}.yml
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    properties:
+      schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8085}
+      # Avro : utiliser SpecificRecord (classes générées) plutôt que GenericRecord
+      specific.avro.reader: true
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      acks: all                       # Durabilité maximale — attend l'ack de tous les ISR
+      properties:
+        enable.idempotence: true      # Pas de doublons en cas de retry
+        max.in.flight.requests.per.connection: 5
+        linger.ms: 20                 # Petit batching — meilleur throughput, latence acceptable
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      group-id: ${spring.application.name}
+      auto-offset-reset: earliest     # Replay les events depuis le début si pas d'offset
+      enable-auto-commit: false       # Commit manuel après traitement réussi
+      properties:
+        # Consumer Avro lit les classes générées (SpecificRecord)
+        specific.avro.reader: true
+    listener:
+      ack-mode: manual_immediate      # Permet @KafkaListener avec Acknowledgment param
+
+  # ─── Spring Security — Resource Server JWT (Keycloak) ───
+  # L'issuer-uri est surchargé par profil (ex: docker → http://keycloak:8180/...)
+  # security:
+  #   oauth2:
+  #     resourceserver:
+  #       jwt:
+  #         issuer-uri: http://localhost:8180/realms/terangamed
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Eureka — découverte de services
+# Les credentials sont embarqués dans l'URL (HTTP Basic). En prod, surcharger
+# EUREKA_USER / EUREKA_PASSWORD via env vars (jamais en clair dans Git).
+# ─────────────────────────────────────────────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:${EUREKA_PORT:8761}/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 10
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    # ID unique par instance (utile en cas de scaling horizontal)
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration métier TerangaMed (lue par common-lib + services)
+# ─────────────────────────────────────────────────────────────────────────────
+terangamed:
+  # ─── Sécurité (JWT Keycloak) ───
+  security:
+    jwt:
+      principal-attribute: preferred_username
+      resource-id: terangamed-backend
+
+  # ─── Finance — devise par défaut + moyens de paiement (cible Sénégal) ───
+  # XOF = FCFA (Franc CFA UEMOA — Sénégal, Côte d'Ivoire, Mali, etc.)
+  # Le service billing-service (étape ultérieure) lira ces propriétés.
+  finance:
+    default-currency: XOF
+    supported-currencies:
+      - XOF
+    enabled-payment-methods:
+      - CASH
+      - CARD
+      - WAVE
+      - ORANGE_MONEY
+      - FREE_MONEY
+      - WIZALL_MONEY
+      - YAS_MONEY
+      - BANK_TRANSFER
+      - CHECK
+
+  # ─── Topics Kafka applicatifs ───
+  # Constants côté code via TerangaMedTopics — ne jamais diverger.
+  kafka:
+    topics:
+      patient: terangamed.patient.events
+      doctor: terangamed.doctor.events
+      appointment: terangamed.appointment.events
+      medical: terangamed.medical.events
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Actuator — exposition mesurée (pas de heap dump ni envvars en prod)
+# ─────────────────────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Documentation OpenAPI / Swagger
+# ─────────────────────────────────────────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    oauth:
+      use-pkce-with-authorization-code-grant: true
+    csrf:
+      enabled: false
+    operationsSorter: method
+    tagsSorter: alpha
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Logging — JSON-ready, correlation-id systématique
+# ─────────────────────────────────────────────────────────────────────────────
+logging:
+  level:
+    root: INFO
+    com.terangamed: DEBUG
+    org.hibernate.SQL: WARN
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId:-}] %logger{36} - %msg%n"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resilience4j — défauts pour clients Feign inter-services
+# ─────────────────────────────────────────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+        register-health-indicator: true
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 500ms
+        # Note : on ne référence ici QUE des classes universellement présentes
+        # (JDK). Les services qui utilisent Feign (appointment-service,
+        # medical-record-service) ajoutent feign.RetryableException dans leur
+        # yml dédié. Le gateway/discovery/config-server n'ont pas Feign sur
+        # leur classpath et planteraient à ConfigurationProperties binding.
+        retry-exceptions:
+          - java.io.IOException
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 3s
+        cancel-running-future: true

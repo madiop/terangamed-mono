@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "DoctorStatusChanged",
+  "namespace": "com.terangamed.doctor.event",
+  "doc": "Émis sur transition de statut : ACTIVE ↔ ON_LEAVE → RETIRED. Permet aux autres services de réagir (ex: appointment-service refuse les nouveaux RDV pour les médecins inactifs).",
+  "fields": [
+    { "name": "eventId",       "type": "string" },
+    { "name": "occurredAt",    "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "doctorId",      "type": "long" },
+    { "name": "licenseNumber", "type": "string" },
+    { "name": "previousStatus", "type": "string", "doc": "ACTIVE | ON_LEAVE | RETIRED" },
+    { "name": "newStatus",     "type": "string", "doc": "ACTIVE | ON_LEAVE | RETIRED" },
+    { "name": "changedBy",     "type": ["null", "string"], "default": null }
+  ]
+}

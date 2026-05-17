@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — exclut du contexte Docker tout ce qui n'est PAS nécessaire au
+# build des images backend. Réduit la taille du contexte envoyé au daemon
+# (de plusieurs centaines de Mo à quelques dizaines), accélère les builds, et
+# évite que des artefacts locaux invalidants invalident le cache Docker.
+#
+# Règle d'or : on n'a besoin QUE des `pom.xml` et des sources `src/` (cf. les
+# COPY explicites dans chaque Dockerfile multi-stage).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Build artifacts Maven
+**/target/
+**/build/
+**/.mvn/wrapper/maven-wrapper.jar
+
+# Outils IDE / éditeurs
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.project
+.settings/
+.classpath
+
+# Système
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Git (les Dockerfile ne dépendent pas du SHA — pas de besoin du .git)
+.git/
+.gitignore
+.gitattributes
+
+# Docker (on ne builde pas Docker dans Docker)
+docker/
+.dockerignore
+**/Dockerfile
+**/Dockerfile.bak
+
+# Documentation
+docs/
+*.md
+LICENSE
+
+# Tests artefacts
+**/surefire-reports/
+**/failsafe-reports/
+**/jacoco.exec
+**/site/
+.scannerwork/
+
+# CI / scripts d'environnement local
+.github/
+scripts/
+.editorconfig
+
+# Variables d'env locales
+.env
+.env.local
+*.env.bak
+
+# Certificats / secrets locaux (par sécurité, ne devraient pas être ici)
+**/*.pem
+**/*.key
+**/secret*

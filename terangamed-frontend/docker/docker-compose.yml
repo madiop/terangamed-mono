@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TerangaMed — Stack Compose FRONTEND (autonome)
+#
+# Ce stack est INDÉPENDANT du stack backend (terangamed-backend/docker/) :
+#   - On peut le lancer seul                  → `docker compose up -d`
+#   - On peut le lancer en parallèle du backend → idem (les 2 stacks coexistent)
+#   - On peut le lancer contre un backend remote → modifier API_BACKEND_URL
+#
+# ─── Pré-requis ─────────────────────────────────────────────────────────────
+# Le frontend rejoint le backend via le réseau Docker `terangamed-net` qui est
+# créé par le stack backend. Si le backend N'A PAS été démarré au préalable,
+# le réseau n'existe pas et `docker compose up` échouera. Solution :
+#
+#   docker network create terangamed-net
+#
+# C'est idempotent (si le réseau existe déjà, la commande retourne juste un
+# message). Une fois le réseau créé, frontend ET backend peuvent rejoindre/
+# quitter le réseau indépendamment l'un de l'autre.
+#
+# ─── Démarrage ──────────────────────────────────────────────────────────────
+#
+#   cd terangamed-frontend/docker
+#   docker compose up -d                # build (1ʳᵉ fois) + run
+#   docker compose logs -f frontend     # suivre les logs Nginx
+#
+#   # Pour pointer vers un backend remote (staging, prod) :
+#   API_BACKEND_URL=https://api.staging.example.com docker compose up -d
+#
+#   # Arrêt + suppression du container (l'image reste)
+#   docker compose down
+#
+# ─── Build forcé ────────────────────────────────────────────────────────────
+#   docker compose build --no-cache frontend
+#   docker compose up -d --force-recreate frontend
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: terangamed-frontend
+
+services:
+
+  # ──────────────────────── Frontend Angular + Nginx ────────────────────────
+  frontend:
+    build:
+      # Context = répertoire parent (terangamed-frontend/) car le Dockerfile
+      # référence src/, package.json, angular.json, nginx/ depuis la racine.
+      context: ..
+      dockerfile: Dockerfile
+    image: terangamed/frontend:1.0.0
+    container_name: terangamed-frontend
+    environment:
+      # URL du backend (api-gateway) côté Nginx (reverse-proxy /api/*). Default =
+      # nom DNS Docker dans `terangamed-net` (cf. backend stack). Surchargeable
+      # via .env ou via export shell.
+      API_BACKEND_URL: ${API_BACKEND_URL:-http://api-gateway:8080}
+      # ─── Runtime config injectée dans /assets/runtime-config.json ─────────
+      # Lu par le SPA AVANT le bootstrap Angular → une seule image Docker
+      # déployable en local / staging / prod sans rebuild.
+      #
+      # KEYCLOAK_ISSUER : URL OIDC complète avec /realms/<name>. En local-Docker
+      # on pointe sur localhost:8180 (Keycloak exposé par le stack backend).
+      # En prod : `export KEYCLOAK_ISSUER=https://auth.example.com/realms/terangamed`.
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8180/realms/terangamed}
+      # API_BASE_URL : préfixe pour les appels API du SPA. Vide = même origine
+      # (le SPA tape /api/* sur Nginx, qui reverse-proxy vers API_BACKEND_URL).
+      # À ne surcharger que si le SPA doit taper DIRECTEMENT un backend remote.
+      API_BASE_URL: ${API_BASE_URL:-}
+    ports:
+      # 4200 = port habituel d'`ng serve`, déjà whitelisted dans le realm
+      # Keycloak (`webOrigins`). Le bind-host 127.0.0.1 limite l'exposition
+      # à la machine locale (par défaut). Surcharger via FRONTEND_BIND_HOST=0.0.0.0
+      # pour exposer au LAN.
+      - "${FRONTEND_BIND_HOST:-127.0.0.1}:${FRONTEND_HOST_PORT:-4200}:80"
+    networks:
+      # `external: true` (cf. bottom du fichier) : le réseau est créé par le
+      # stack backend (ou manuellement via `docker network create`). Le
+      # frontend s'y attache sans le créer ni le détruire.
+      - terangamed-net
+    restart: unless-stopped
+    # Le healthcheck est défini dans le Dockerfile (wget -q --spider 127.0.0.1).
+    # On peut le surcharger ici si besoin de debug, mais c'est inutile en V1.
+
+networks:
+  terangamed-net:
+    # `external: true` exige que le réseau existe DÉJÀ avant le `up`.
+    # Création par : (a) le stack backend qui le déclare avec `name: terangamed-net`,
+    # ou (b) `docker network create terangamed-net` manuellement.
+    external: true
+    name: terangamed-net

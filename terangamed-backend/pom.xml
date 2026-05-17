@@ -1,0 +1,413 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        TerangaMed — Parent POM
+        ───────────────────────
+        - Java 21 LTS
+        - Spring Boot 3.2.5
+        - Spring Cloud 2023.0.1
+        - Jacoco coverage check ≥ 80% (BUNDLE level, classes triviales exclues)
+        - Annotation processors : Lombok + MapStruct + Lombok-MapStruct binding
+    -->
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.terangamed</groupId>
+    <artifactId>terangamed-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>terangamed-parent</name>
+    <description>TerangaMed — Parent POM (microservices for medical practice management)</description>
+
+    <modules>
+        <module>common-lib</module>
+        <module>infrastructure/config-server</module>
+        <module>infrastructure/discovery-server</module>
+        <module>infrastructure/api-gateway</module>
+        <module>services/patient-service</module>
+        <module>services/doctor-service</module>
+        <module>services/appointment-service</module>
+        <module>services/medical-record-service</module>
+        <module>services/notification-service</module>
+        <!-- Modules ajoutés progressivement :
+        <module>services/billing-service</module>
+        -->
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Versions BOMs / libs -->
+        <spring-cloud.version>2023.0.1</spring-cloud.version>
+        <!-- MapStruct 1.6.x : corrige plusieurs bugs annotation processor + JDK 21
+             (notamment "error reading XxxImpl.java" sur build incrémental). -->
+        <mapstruct.version>1.6.3</mapstruct.version>
+        <lombok.version>1.18.34</lombok.version>
+        <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
+        <springdoc.version>2.5.0</springdoc.version>
+        <!-- swagger-annotations 2.2.x : nécessaire pour Schema.RequiredMode
+             (introduit en 2.2.0). On l'épingle pour éviter qu'une dep transitive
+             ramène une 2.1.x qui n'a pas cette enum. -->
+        <swagger-annotations.version>2.2.22</swagger-annotations.version>
+        <!-- Testcontainers 1.21+ utilise docker-java 3.5+ qui supporte Docker 28-29
+             (API 1.50-1.54) et l'image store containerd. Indispensable pour
+             Docker Desktop 4.71+. La 1.20.x lève "Status 400" sur le endpoint /info
+             quand containerd image store est actif. -->
+        <testcontainers.version>1.21.3</testcontainers.version>
+        <jacoco.version>0.8.11</jacoco.version>
+        <logstash-logback.version>7.4</logstash-logback.version>
+        <resilience4j.version>2.2.0</resilience4j.version>
+
+        <!-- Kafka / Avro / Confluent (étape 8) -->
+        <!-- Confluent 7.6.x = Kafka client 3.6.x — aligné avec cp-kafka:7.6.1 -->
+        <confluent.version>7.6.1</confluent.version>
+        <avro.version>1.11.3</avro.version>
+
+        <!-- Génération PDF ordonnances (medical-record-service) -->
+        <!-- openhtmltopdf 1.0.10 = dernier stable, supporte Java 21 + CSS3 + UTF-8 fonts.
+             Le sous-module pdfbox produit du PDF/A-conforme via Apache PDFBox 2.0.x. -->
+        <openhtmltopdf.version>1.0.10</openhtmltopdf.version>
+        <!-- minio-java 8.5.x : client S3-compatible, Java 11+, support des bucket policies
+             et de la signature v4. Branche 8.5 = stable, branche 9 reste expérimentale. -->
+        <minio.version>8.5.12</minio.version>
+        <!-- ZXing pour QR de vérification d'ordonnance (encodage uniquement côté backend) -->
+        <zxing.version>3.5.3</zxing.version>
+
+        <!-- Couverture -->
+        <jacoco.coverage.minimum>0.80</jacoco.coverage.minimum>
+    </properties>
+
+    <!--
+        Repository Confluent — héberge kafka-avro-serializer, kafka-schema-registry-client,
+        etc. Ces artefacts ne sont pas sur Maven Central.
+    -->
+    <repositories>
+        <repository>
+            <id>confluent</id>
+            <name>Confluent</name>
+            <url>https://packages.confluent.io/maven/</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <!-- Force swagger-annotations 2.2.x pour disposer de Schema.RequiredMode.
+                 Sans ce pin, une dep transitive (souvent indirectement via Spring
+                 Cloud ou un autre starter) peut ramener 2.1.x → cannot find symbol
+                 'requiredMode()' à la compil. -->
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations</artifactId>
+                <version>${swagger-annotations.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations-jakarta</artifactId>
+                <version>${swagger-annotations.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>${logstash-logback.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-spring-boot3</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+
+            <!-- Avro (sérialisation des events Kafka) -->
+            <dependency>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro</artifactId>
+                <version>${avro.version}</version>
+            </dependency>
+
+            <!-- Confluent — Schema Registry client + Avro serializer -->
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-avro-serializer</artifactId>
+                <version>${confluent.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-schema-registry-client</artifactId>
+                <version>${confluent.version}</version>
+            </dependency>
+
+            <!-- Testcontainers Kafka -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>kafka</artifactId>
+                <version>${testcontainers.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <!-- Testcontainers MinIO — utilisé par PrescriptionPdfServiceIT pour valider
+                 le storage end-to-end sans dépendre du compose local. -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>minio</artifactId>
+                <version>${testcontainers.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- ─── PDF generation stack (medical-record-service) ─── -->
+            <!-- OpenHTMLtoPDF : Thymeleaf HTML → PDF/A via PDFBox. Choisi pour son
+                 support CSS3, fonts UTF-8 (DejaVu) et licence permissive (LGPL). -->
+            <dependency>
+                <groupId>com.openhtmltopdf</groupId>
+                <artifactId>openhtmltopdf-pdfbox</artifactId>
+                <version>${openhtmltopdf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openhtmltopdf</groupId>
+                <artifactId>openhtmltopdf-slf4j</artifactId>
+                <version>${openhtmltopdf.version}</version>
+            </dependency>
+
+            <!-- minio-java : client S3-compatible pour stockage des ordonnances PDF.
+                 Apache 2.0, supporte signature v4, multipart upload, bucket policy. -->
+            <dependency>
+                <groupId>io.minio</groupId>
+                <artifactId>minio</artifactId>
+                <version>${minio.version}</version>
+            </dependency>
+
+            <!-- ZXing — encodage QR code de vérification (URL publique sur le PDF). -->
+            <dependency>
+                <groupId>com.google.zxing</groupId>
+                <artifactId>core</artifactId>
+                <version>${zxing.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.zxing</groupId>
+                <artifactId>javase</artifactId>
+                <version>${zxing.version}</version>
+            </dependency>
+
+            <!-- Module interne -->
+            <dependency>
+                <groupId>com.terangamed</groupId>
+                <artifactId>common-lib</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!--
+                    Avro Maven Plugin — génère les classes Java SpecificRecord depuis
+                    les .avsc présents dans src/main/avro de chaque service.
+                    Activé uniquement dans les modules qui déclarent ce plugin.
+                -->
+                <plugin>
+                    <groupId>org.apache.avro</groupId>
+                    <artifactId>avro-maven-plugin</artifactId>
+                    <version>${avro.version}</version>
+                    <executions>
+                        <execution>
+                            <id>schemas</id>
+                            <phase>generate-sources</phase>
+                            <goals>
+                                <goal>schema</goal>
+                            </goals>
+                            <configuration>
+                                <sourceDirectory>${project.basedir}/src/main/avro</sourceDirectory>
+                                <outputDirectory>${project.build.directory}/generated-sources/avro</outputDirectory>
+                                <stringType>String</stringType>
+                                <fieldVisibility>PRIVATE</fieldVisibility>
+                                <enableDecimalLogicalType>true</enableDecimalLogicalType>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <release>${java.version}</release>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.mapstruct</groupId>
+                                <artifactId>mapstruct-processor</artifactId>
+                                <version>${mapstruct.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok-mapstruct-binding</artifactId>
+                                <version>${lombok-mapstruct-binding.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <configuration>
+                        <excludes>
+                            <exclude>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                            </exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                    <!--
+                        Excludes au NIVEAU PLUGIN (et non dans <rule>) : c'est ici que
+                        les classes sont effectivement retirées de l'instrumentation et
+                        du calcul de couverture. Inside <rule><excludes>, ça ne filtrerait
+                        que des noms de bundles, pas des classes — piège classique.
+                    -->
+                    <configuration>
+                        <excludes>
+                            <exclude>**/dto/**</exclude>
+                            <exclude>**/entity/**</exclude>
+                            <exclude>**/config/**</exclude>
+                            <exclude>**/*Application.*</exclude>
+                            <!-- Spring Boot AutoConfiguration : pure plumbing (testée par @SpringBootTest end-to-end uniquement) -->
+                            <exclude>**/*AutoConfiguration.*</exclude>
+                            <!-- Lombok-generated bytecode -->
+                            <exclude>**/generated/**</exclude>
+                            <!-- MapStruct-generated implementations -->
+                            <exclude>**/*MapperImpl.*</exclude>
+                            <exclude>**/mapper/**</exclude>
+                            <!-- Avro-generated SpecificRecord classes -->
+                            <exclude>**/avro/**</exclude>
+                        </excludes>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>prepare-agent</id>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>prepare-agent-integration</id>
+                            <goals>
+                                <goal>prepare-agent-integration</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>report</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>check-coverage</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                            <configuration>
+                                <haltOnFailure>true</haltOnFailure>
+                                <rules>
+                                    <rule>
+                                        <element>BUNDLE</element>
+                                        <limits>
+                                            <limit>
+                                                <counter>INSTRUCTION</counter>
+                                                <value>COVEREDRATIO</value>
+                                                <minimum>${jacoco.coverage.minimum}</minimum>
+                                            </limit>
+                                        </limits>
+                                    </rule>
+                                </rules>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Profil 'fast' : skip jacoco check pour itérations rapides en dev -->
+        <profile>
+            <id>fast</id>
+            <properties>
+                <jacoco.skip>true</jacoco.skip>
+            </properties>
+        </profile>
+    </profiles>
+</project>

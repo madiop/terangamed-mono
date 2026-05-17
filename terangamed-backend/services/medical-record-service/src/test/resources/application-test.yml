@@ -1,0 +1,42 @@
+# Profil 'test' — utilisé par tous les @DataJpaTest et @SpringBootTest.
+# Désactive Spring Cloud Config + Eureka (containers Testcontainers fournissent
+# la datasource via @ServiceConnection).
+
+spring:
+  cloud:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+
+  config:
+    # Quoting nécessaire — Spring Boot accepte le format optional:configserver:
+    # mais le parser YAML interprète les ":" multiples comme un mapping invalide.
+    import: "optional:configserver:"
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration,classpath:db/migration/common
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+terangamed:
+  outbox:
+    enabled: false
+
+logging:
+  level:
+    com.terangamed.medical: DEBUG
+    org.hibernate.SQL: WARN

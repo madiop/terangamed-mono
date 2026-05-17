@@ -1,0 +1,3 @@
+com.terangamed.common.config.CommonLibAutoConfiguration
+com.terangamed.common.config.JpaAuditingAutoConfiguration
+com.terangamed.common.outbox.OutboxAutoConfiguration

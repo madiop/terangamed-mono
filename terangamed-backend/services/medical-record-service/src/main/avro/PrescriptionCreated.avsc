@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "PrescriptionCreated",
+  "namespace": "com.terangamed.medical.event",
+  "doc": "Émis quand une ordonnance est créée. Déclenche typiquement la génération du PDF et l'envoi au patient.",
+  "fields": [
+    { "name": "eventId",            "type": "string" },
+    { "name": "occurredAt",         "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "prescriptionId",     "type": "long" },
+    { "name": "prescriptionNumber", "type": "string" },
+    { "name": "consultationId",     "type": "long" },
+    { "name": "patientId",          "type": "long" },
+    { "name": "doctorId",           "type": "long" },
+    { "name": "issuedAt",           "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "validUntil",         "type": ["null", { "type": "int", "logicalType": "date" }], "default": null },
+    { "name": "lineCount",          "type": "int", "doc": "Nombre de médicaments prescrits" }
+  ]
+}

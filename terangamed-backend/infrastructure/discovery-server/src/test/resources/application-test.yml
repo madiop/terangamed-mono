@@ -1,0 +1,35 @@
+server:
+  port: 0  # port aléatoire pour éviter les conflits
+
+spring:
+  application:
+    name: discovery-server-test
+  cloud:
+    config:
+      enabled: false  # pas d'appel au Config Server en test
+  security:
+    user:
+      name: testuser
+      password: testpass
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  server:
+    enable-self-preservation: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.netflix.eureka: ERROR
+    com.netflix.discovery: ERROR

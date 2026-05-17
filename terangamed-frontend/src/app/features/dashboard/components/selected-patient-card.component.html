@@ -1,0 +1,148 @@
+<article class="card patient-card">
+  @if (patientId === null) {
+    <div class="empty-state">
+      <span class="material-icons-round empty-icon">person_search</span>
+      <h3 class="empty-title">Dossier patient</h3>
+      <p class="empty-text">
+        Cliquez sur un rendez-vous dans le planning pour afficher le dossier du patient.
+      </p>
+    </div>
+  } @else if (loading()) {
+    <div class="loading-state" aria-busy="true">
+      <span class="material-icons-round spin">progress_activity</span>
+      <p>Chargement du dossier…</p>
+    </div>
+  } @else if (error()) {
+    <!-- Pas d'alias 'as' ici — on lit error() directement dans le bloc -->
+    <div class="error-state">
+      <span class="material-icons-round">error_outline</span>
+      <p>{{ error() }}</p>
+    </div>
+  } @else {
+    <!-- Nouveau primary @if (chaîne séparée) → 'as p' autorisé -->
+    @if (patient(); as p) {
+      <header class="patient-header">
+        <div class="patient-avatar">{{ initials() }}</div>
+        <div class="patient-identity">
+          <h3 class="patient-name">
+            {{ p.firstName }} {{ p.lastName }}
+            @if (age() !== null) {
+              <span class="patient-age">, {{ age() }} ans</span>
+            }
+          </h3>
+          <p class="patient-mrn">N° dossier : {{ p.medicalRecordNumber }}</p>
+        </div>
+      </header>
+
+      @if (medicalRecord()?.allergiesSummary; as allergies) {
+        <div class="allergies-block">
+          <span class="material-icons-round">warning</span>
+          <div>
+            <span class="allergies-label">Allergies</span>
+            <span class="allergies-content">{{ allergies }}</span>
+          </div>
+        </div>
+      }
+
+      <mat-tab-group class="patient-tabs" animationDuration="200ms">
+        <!-- Tab : Informations -->
+        <mat-tab label="Informations">
+          <div class="tab-content">
+            <dl class="info-grid">
+              <dt>Téléphone</dt>
+              <dd>{{ p.phone || '—' }}</dd>
+
+              <dt>Email</dt>
+              <dd>{{ p.email || '—' }}</dd>
+
+              <dt>Adresse</dt>
+              <dd>{{ formatAddress(p) }}</dd>
+
+              <dt>Groupe sanguin</dt>
+              <dd>{{ medicalRecord()?.bloodType || '—' }}</dd>
+
+              <dt>Contact d'urgence</dt>
+              <dd>{{ formatEmergencyContact(p) }}</dd>
+            </dl>
+          </div>
+        </mat-tab>
+
+        <!-- Onglets dossier médical — masqués en vue restreinte (RECEPTIONIST) -->
+        @if (!restrictedView) {
+          <!-- Tab : Historique -->
+          <mat-tab label="Historique">
+            <div class="tab-content">
+              @if (consultations().length === 0) {
+                <p class="text-muted no-content">Aucune consultation enregistrée.</p>
+              } @else {
+                <ul class="history-list">
+                  @for (c of consultations(); track c.id) {
+                    <li class="history-item">
+                      <div class="history-date">{{ formatDate(c.consultationDate) }}</div>
+                      <div class="history-details">
+                        <p class="history-motif">{{ c.motif }}</p>
+                        @if (c.diagnostic) {
+                          <p class="history-diag text-muted">{{ c.diagnostic }}</p>
+                        }
+                      </div>
+                      @if (c.signed) {
+                        <span class="history-badge">Signée</span>
+                      } @else {
+                        <span class="history-badge history-badge--pending">En cours</span>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- Tab : Prescriptions -->
+          <mat-tab label="Prescriptions">
+            <div class="tab-content">
+              @if (latestConsultation(); as last) {
+                <p class="text-muted">
+                  Dernière consultation : {{ formatDate(last.consultationDate) }}
+                </p>
+                <p class="text-muted no-content">
+                  La liste complète des ordonnances est disponible sur la page détail du patient.
+                </p>
+              } @else {
+                <p class="text-muted no-content">Aucune ordonnance.</p>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- Tab : Documents -->
+          <mat-tab label="Documents">
+            <div class="tab-content">
+              <p class="text-muted no-content">Module Documents à venir (étape ultérieure).</p>
+            </div>
+          </mat-tab>
+        }
+      </mat-tab-group>
+
+      @if (!restrictedView) {
+        @if (latestConsultation(); as last) {
+          <div class="last-consultation">
+            <p class="last-label">Dernière consultation</p>
+            <p class="last-date">{{ formatDate(last.consultationDate) }}</p>
+            @if (last.diagnostic) {
+              <p class="last-diag">{{ last.diagnostic }}</p>
+            }
+          </div>
+        }
+      }
+
+      <div class="card-actions">
+        <button type="button" class="btn btn-outline" (click)="goToPatientDetail()">
+          Voir détails
+        </button>
+        <button type="button" class="btn btn-primary" (click)="goToNewConsultation()">
+          <span class="material-icons-round">add</span>
+          Nouvelle consultation
+        </button>
+      </div>
+    }
+  }
+</article>

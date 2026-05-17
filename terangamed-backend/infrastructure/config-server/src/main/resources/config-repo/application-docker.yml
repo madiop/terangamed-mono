@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Profil 'docker' — overrides pour environnement docker-compose.
+# Les hostnames pointent vers les noms de services Docker.
+# ─────────────────────────────────────────────────────────────────────────────
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@discovery-server:8761/eureka/
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # ATTENTION : on ne définit que jwk-set-uri (signature + expiration validées),
+          # pas issuer-uri. Raison : le token émis par Keycloak côté browser a
+          # iss=http://localhost:8180/realms/terangamed, mais les services backend
+          # accèdent à Keycloak via http://keycloak:8180/... (DNS Docker). Avec
+          # issuer-uri, Spring ferait un discovery via http://keycloak:8180 → l'issuer
+          # retourné dans .well-known dépend du Host header → mismatch garanti → 401.
+          # En supprimant issuer-uri, l'issuer claim n'est PAS validé, mais la
+          # signature reste vérifiée via JWKS → seul un token signé par Keycloak
+          # est accepté. Acceptable en dev. En prod, configurer Keycloak avec
+          # KC_HOSTNAME=<domaine public stable> partagé entre browser et backend.
+          jwk-set-uri: http://keycloak:8180/realms/terangamed/protocol/openid-connect/certs
+
+  # Kafka — hostnames Docker network
+  kafka:
+    bootstrap-servers: kafka:9092
+    properties:
+      schema.registry.url: http://schema-registry:8085
+
+# Logs un peu plus verbeux en docker pour faciliter le debug
+logging:
+  level:
+    com.terangamed: DEBUG
+    org.springframework.security: INFO

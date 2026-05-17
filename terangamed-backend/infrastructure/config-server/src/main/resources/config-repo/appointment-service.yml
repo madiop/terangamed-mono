@@ -1,0 +1,62 @@
+# Configuration spécifique appointment-service.
+
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: ${APPOINTMENT_DB_URL:jdbc:postgresql://localhost:5432/appointment_db}
+    hikari:
+      pool-name: appointment-service-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+logging:
+  level:
+    com.terangamed.appointment: DEBUG
+    com.terangamed.appointment.feign: TRACE       # log des appels Feign sortants
+    io.github.resilience4j: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,flyway,circuitbreakers,circuitbreakerevents,retries
+
+# Feign — timeouts (affinables par client si besoin)
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 5000
+        loggerLevel: BASIC
+
+# Resilience4j — ajout de feign.RetryableException aux retry-exceptions
+# (la common application.yml ne référence que IOException pour rester compatible
+# avec les modules sans Feign : api-gateway, discovery-server, config-server).
+resilience4j:
+  retry:
+    configs:
+      default:
+        retry-exceptions:
+          - java.io.IOException
+          - feign.RetryableException
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/appointment_db
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  flyway:
+    # Active le seed dev (V900__dev_seed_appointments.sql) en plus des migrations
+    # standard. Profile activé via SPRING_PROFILES_ACTIVE=docker,dev en compose.
+    locations: classpath:db/migration,classpath:db/migration/common,classpath:db/migration-dev

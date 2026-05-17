@@ -1,0 +1,4 @@
+{
+  "keycloakIssuer": "http://localhost:8180/realms/terangamed",
+  "apiBaseUrl": ""
+}

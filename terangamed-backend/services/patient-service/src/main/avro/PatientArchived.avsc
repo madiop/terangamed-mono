@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "PatientArchived",
+  "namespace": "com.terangamed.patient.event",
+  "doc": "Émis quand un patient est archivé (soft delete logique). Les autres services doivent désactiver les RDV futurs, freiner les notifications, etc.",
+  "fields": [
+    { "name": "eventId",             "type": "string" },
+    { "name": "occurredAt",          "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "patientId",           "type": "long" },
+    { "name": "medicalRecordNumber", "type": "string" },
+    { "name": "archivedBy",          "type": ["null", "string"], "default": null, "doc": "preferred_username de l'utilisateur ayant archivé" }
+  ]
+}

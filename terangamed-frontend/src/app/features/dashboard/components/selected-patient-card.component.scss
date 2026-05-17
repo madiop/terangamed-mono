@@ -1,0 +1,292 @@
+// Carte "Dossier patient" — design TerangaMed.
+
+.patient-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 480px;
+}
+
+// ─── États transverses ───
+.empty-state,
+.loading-state,
+.error-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+  gap: 12px;
+}
+
+.empty-state {
+  .empty-icon {
+    font-size: 48px;
+    color: var(--color-text-subtle, #9ca3af);
+  }
+  .empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+  }
+  .empty-text {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin: 0;
+    max-width: 240px;
+    line-height: 1.5;
+  }
+}
+
+.loading-state {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  .material-icons-round { font-size: 28px; }
+}
+
+.error-state {
+  color: var(--color-danger);
+  .material-icons-round { font-size: 28px; }
+}
+
+.spin {
+  animation: tm-spin 0.9s linear infinite;
+}
+@keyframes tm-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+// ─── Header ───
+.patient-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.patient-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dk));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: var(--shadow);
+}
+
+.patient-identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.patient-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+  line-height: 1.3;
+}
+.patient-age {
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.patient-mrn {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+// ─── Allergies ───
+.allergies-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 24px 8px;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border-left: 3px solid var(--color-warning);
+  border-radius: 6px;
+
+  .material-icons-round {
+    color: var(--color-warning);
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .allergies-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #92400e;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .allergies-content {
+    font-size: 13px;
+    color: #78350f;
+    line-height: 1.4;
+  }
+}
+
+// ─── Tabs Material — overrides ───
+.patient-tabs {
+  margin: 8px 0 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  // Material 17 — réduction densité tabs
+  ::ng-deep .mat-mdc-tab-header {
+    border-bottom: 1px solid var(--color-border);
+  }
+  ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  ::ng-deep .mdc-tab__content {
+    padding: 0 14px !important;
+  }
+}
+
+.tab-content {
+  padding: 16px 24px;
+}
+
+.no-content {
+  font-size: 13px;
+  text-align: center;
+  padding: 16px 0;
+}
+
+// ─── Tab Informations ───
+.info-grid {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 8px 12px;
+  margin: 0;
+  font-size: 13px;
+
+  dt {
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+  dd {
+    color: var(--color-text);
+    margin: 0;
+    overflow-wrap: break-word;
+  }
+}
+
+// ─── Tab Historique ───
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-bg);
+  align-items: center;
+}
+
+.history-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+
+.history-details {
+  min-width: 0;
+}
+
+.history-motif {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.history-diag {
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+
+.history-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #d1fae5;
+  color: #065f46;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.history-badge--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+// ─── Footer dernière consultation + CTAs ───
+.last-consultation {
+  margin: 8px 24px 16px;
+  padding: 12px 14px;
+  background: var(--color-bg);
+  border-radius: 8px;
+
+  .last-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+  .last-date {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 4px 0 0;
+    text-transform: capitalize;
+  }
+  .last-diag {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin: 2px 0 0;
+  }
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 24px 20px;
+  margin-top: auto;
+
+  .btn {
+    flex: 1;
+    padding: 9px 12px;
+  }
+}

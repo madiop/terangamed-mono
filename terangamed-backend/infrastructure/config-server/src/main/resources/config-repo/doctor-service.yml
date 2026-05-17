@@ -1,0 +1,39 @@
+# Configuration spécifique doctor-service (override de config-repo/application.yml).
+
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: ${DOCTOR_DB_URL:jdbc:postgresql://localhost:5432/doctor_db}
+    hikari:
+      pool-name: doctor-service-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+logging:
+  level:
+    com.terangamed.doctor: DEBUG
+    com.terangamed.doctor.specification: TRACE
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,flyway
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/doctor_db
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  flyway:
+    locations: classpath:db/migration,classpath:db/migration/common,classpath:db/migration-dev

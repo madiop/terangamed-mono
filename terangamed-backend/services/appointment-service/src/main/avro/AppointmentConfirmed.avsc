@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "AppointmentConfirmed",
+  "namespace": "com.terangamed.appointment.event",
+  "doc": "Émis quand un RDV passe de PLANNED → CONFIRMED. Déclenche typiquement une notification de rappel patient.",
+  "fields": [
+    { "name": "eventId",       "type": "string" },
+    { "name": "occurredAt",    "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "appointmentId", "type": "long" },
+    { "name": "patientId",     "type": "long" },
+    { "name": "doctorId",      "type": "long" },
+    { "name": "startTime",     "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "confirmedBy",   "type": ["null", "string"], "default": null }
+  ]
+}

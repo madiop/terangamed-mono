@@ -1,0 +1,71 @@
+server:
+  port: 0
+
+spring:
+  application:
+    name: api-gateway-test
+
+  # IMPORTANT : on doit BOTH neutraliser le client config (cloud.config.enabled)
+  # ET surcharger spring.config.import. Le main application.yml a :
+  #   spring.config.import=optional:configserver:http://localhost:8888
+  # Le préfixe 'optional:' n'aide PAS si un config-server local tourne en
+  # parallèle — les tests deviennent alors dépendants d'une instance hors
+  # contexte (et potentiellement stale). On override avec une string vide
+  # pour rendre les tests strictement isolés.
+  config:
+    import: ""
+
+  # Désactive le client Spring Cloud Config (defense en profondeur)
+  cloud:
+    config:
+      enabled: false
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+      # Routes minimales pour le test (override le YAML principal qui utilise lb://
+      # vers des services Eureka inexistants en test)
+      routes:
+        - id: stub
+          uri: https://example.com
+          predicates:
+            - Path=/stub/**
+
+  # IMPORTANT : application.yml principal définit issuer-uri (pour le runtime).
+  # Au démarrage de test, Spring déclencherait IssuerUriCondition et tenterait
+  # de fetch http://localhost:8180/realms/terangamed/.well-known/openid-configuration
+  # → échec car Keycloak n'est pas lancé.
+  # On vide explicitement issuer-uri (StringUtils.hasText("") = false → condition KO).
+  # Seul jwk-set-uri reste actif ; NimbusReactiveJwtDecoder est lazy donc pas d'I/O au boot.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ""
+          jwk-set-uri: http://localhost:65535/.well-known/jwks.json
+
+terangamed:
+  security:
+    jwt:
+      principal-attribute: preferred_username
+      resource-id: terangamed-backend
+
+# Désactive Eureka en test
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    org.springframework.cloud.gateway: WARN
+    reactor.netty: ERROR
+    com.netflix: ERROR
+    org.springframework.security: WARN
