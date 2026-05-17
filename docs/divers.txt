@@ -19,6 +19,7 @@ Console admin Keycloak            http://localhost:8180/                        
 Account console realm terangamed  http://localhost:8180/realms/terangamed/account/   admin / admin (utilisateur du realm)
 Account console realm terangamed  http://localhost:8180/realms/terangamed/account/   dr.martin / doctor123
 Account console realm terangamed  http://localhost:8180/realms/terangamed/account/   reception / reception
+Ouvrir http://localhost:9001 — login terangamed / terangamed-secret-2026 (cf. .env). Naviguer dans terangamed-prescriptions — vide au départ.
 
 # 1. Voir toutes les routes que le gateway a chargées
 curl -s http://localhost:8080/actuator/gateway/routes | python3 -m json.tool | head -80
@@ -46,6 +47,7 @@ Switch Java Version
 export JAVA_HOME=`/usr/libexec/java_home -v 17.0.1`
 export JAVA_HOME=`/usr/libexec/java_home -v 21.0.10`
 ###########################################
+Ouvrir http://localhost:9001 — login terangamed / terangamed-secret-2026 (cf. .env). Naviguer dans terangamed-prescriptions — vide au départ.
 ###### Processus et port
 # 1. Voir tous les processus utilisant 5432 (avec sudo, sinon vous ne voyez pas tout)
 sudo lsof -nP -iTCP:5432 -sTCP:LISTEN
@@ -126,13 +128,16 @@ Suite — étape 10C.5 : validation manuelle end-to-end
 C'est l'étape de sign-off : tu lances toi-même la stack et tu joues le scénario du §3 de la doc. Je ne peux pas faire ça à ta place (besoin de Docker + Keycloak + Maven en local).
 Procédure proposée
 Phase A — Démarrage stack (~5 min)
-bashcd terangamed-backend/docker
-docker compose up -d postgres keycloak kafka schema-registry
-Attendre que docker compose logs -f keycloak | grep "Listening on" apparaisse.
+  bash
+    cd terangamed-backend/docker
+    docker compose up -d postgres keycloak kafka schema-registry
+      Attendre que docker compose logs -f keycloak | grep "Listening on" apparaisse.
 Phase B — Démarrer les 5 services (chaque service dans un terminal ou via IntelliJ)
-bash./mvnw -pl services/patient-service,services/doctor-service,services/appointment-service,services/medical-record-service,services/notification-service spring-boot:run
+  bash
+    ./mvnw -pl services/patient-service,services/doctor-service,services/appointment-service,services/medical-record-service,services/notification-service spring-boot:run
 Phase C — Smoke test automatique
-bash./scripts/swagger-smoke.sh
+  bash
+    ./scripts/swagger-smoke.sh
 Critère : Tous les services Swagger OK : 5/5
 Phase D — Validation manuelle Swagger UI
 
@@ -182,3 +187,60 @@ cd terangamed-backend/docker
 docker compose down -v          # ⚠️ supprime les volumes (DB + Keycloak)
 docker compose up -d postgres keycloak kafka schema-registry kafka-ui
 # Puis relancer les 5 services Spring (les migrations Flyway repassent)
+###############################################
+cd "Teranga Medical"
+
+# Une seule fois : créer le réseau partagé
+docker network create terangamed-net
+
+# Backend (12 services) — premier lancement ≈ 5-10 min (build), puis ≈ 30 s
+cd terangamed-backend/docker
+docker compose up -d
+
+# Frontend (Nginx + bundle Angular)
+cd ../../terangamed-frontend/docker
+docker compose up -d
+
+# Retour à la racine
+cd ../..
+
+# Validation rapide
+./scripts/swagger-smoke.sh
+### Accès à
+Accès :
+
+Frontend : http://localhost:4200
+API Gateway : http://localhost:8080
+Swagger UI direct : http://localhost:8081 (patient) … :8086 (notification)
+Keycloak admin : http://localhost:8180 (admin / admin)
+Eureka : http://localhost:8761 (eureka / eureka)
+#############################################
+#  Commandes utiles pendant le dev###########
+
+# Token frais pour tester via curl ou Postman (copié dans clipboard)
+./scripts/get-token.sh reception     # ou admin / dr.martin
+
+# Smoke API (validation rapide après une modif)
+./scripts/swagger-smoke.sh
+
+# Smoke E2E complet
+./scripts/e2e-smoke-backend.sh --keep
+./scripts/e2e-smoke-frontend.sh
+
+# Logs d'un service spécifique
+docker compose -f terangamed-backend/docker/docker-compose.yml logs -f medical-record-service
+
+# Restart d'un service après rebuild d'image
+docker compose -f terangamed-backend/docker/docker-compose.yml \
+    up -d --build medical-record-service
+
+# Réimporter le realm Keycloak après modif du JSON
+./scripts/reset-keycloak-realm.sh
+# Cleanup en fin de session ###################
+# Arrêt simple (volumes conservés — données préservées)
+docker compose -f terangamed-frontend/docker/docker-compose.yml down
+docker compose -f terangamed-backend/docker/docker-compose.yml down
+
+# Reset total si tu veux repartir from scratch (⚠️ efface les données dev)
+docker compose -f terangamed-backend/docker/docker-compose.yml down -v
+docker network rm terangamed-net
